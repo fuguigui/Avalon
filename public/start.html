@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Start a New Avalon Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; background: #222; color: #eee; }
+    .container { max-width: 500px; margin: 2em auto; background: #333; padding: 2em; border-radius: 12px; }
+    h2 { text-align: center; }
+    label { display: block; margin-top: 1em; }
+    input { width: 100%; padding: 0.5em; margin-top: 0.5em; border-radius: 4px; border: 1px solid #555; background: #222; color: #eee; }
+    button { margin-top: 2em; padding: 0.7em 2em; font-size: 1.1em; border: none; border-radius: 6px; background: #4caf50; color: #fff; cursor: pointer; }
+    .error { color: #ff5252; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Start a New Avalon Game</h2>
+    <form id="start-form">
+      <label for="num-players">Number of Players:</label>
+      <input type="number" id="num-players" name="numPlayers" min="5" max="10" required>
+      <label for="num-ai">Number of AI Roles:</label>
+      <input type="number" id="num-ai" name="numAI" min="0" max="10" required>
+      <button type="submit">Create Game</button>
+      <div class="error" id="start-error"></div>
+    </form>
+    <button id="back-btn">Back</button>
+  </div>
+  <script>
+    document.getElementById('back-btn').onclick = function() {
+      window.location.href = 'index.html';
+    };
+
+    document.getElementById('start-form').onsubmit = function(e) {
+      e.preventDefault();
+      // Example: collect values and send to backend
+      const numPlayers = document.getElementById('num-players').value;
+      const numAI = document.getElementById('num-ai').value;
+      // TODO: Replace with your backend logic
+      alert(`Game created with ${numPlayers} players and ${numAI} AI roles.`);
+      // Optionally redirect or show error
+    };
