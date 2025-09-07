@@ -71,6 +71,12 @@ button.discard:hover {
     margin-top: 1em;
 }
 
+
+.hint {
+    color: #435df5;
+    margin-top: 1em;
+}
+
 .error {
     color: #ff5252;
     margin-top: 1em;
