@@ -20,6 +20,7 @@ Each game document contains
 ```
 npm install -g firebase-tools
 firebase init emulators
+
+
 firebase serve -p 5001 # if 5000 is taken
 ```
-Choose the Firestore. local UI: http://localhost:4000

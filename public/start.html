@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js"></script>
+    <script type="module" src="firebase-config.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -40,7 +40,15 @@
             <div class="info" id="game-info"></div>
         </form>
     </div>
-    <script>
+    <script type="module">
+
+        // Import 'db' (your Firestore instance) from the firebase-config.js file
+        import { db } from './firebase-config.js';
+
+        // Also import the specific Firestore functions you need
+        import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+
         // Check admin login
         if (!localStorage.getItem('avalon_admin_name')) {
             location.href = 'login.html';
@@ -75,6 +83,10 @@
             });
         }
 
+        discardBtn.onclick = () => {
+            window.location.href = 'admin.html';
+        };
+
         form.onsubmit = async (e) => {
             e.preventDefault();
             errorDiv.textContent = '';
@@ -99,6 +111,20 @@
             const gameCode = Math.random().toString(36).substr(2, 6).toUpperCase();
             // Create game in Firestore
             try {
+                // Use the 'db' instance imported from firebase-config.js
+                const docRef = await addDoc(collection(db, "games"), {
+                    game_id: gameCode,
+                    admin_id: localStorage.getItem('avalon_admin_name'),
+                    created_at: serverTimestamp(),
+                    state: "waiting",
+                    num_players: numPlayers,
+                    num_ai: numAI,
+                    roles: roles,
+                    players: [],
+                    assignments: {},
+                });
+                localStorage.setItem('avalon_game_id', docRef.id);
+
                 // await db.collection('games').add({
                 //   admin: localStorage.getItem('avalon_admin_name'),
                 //   gameCode,
@@ -146,10 +172,9 @@
 
             } catch (err) {
                 errorDiv.textContent = err.message;
+                console.error("Error adding document: ", err);
+                alert("Failed to add item. Check console for details.");
             }
-        };
-        discardBtn.onclick = () => {
-            location.href = 'index.html';
         };
     </script>
 </body>
