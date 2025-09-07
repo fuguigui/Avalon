@@ -6,88 +6,15 @@
   <meta charset="UTF-8">
   <title>Avalon Game Host</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #222;
-      color: #eee;
-    }
-
-    .container {
-      max-width: 500px;
-      margin: 2em auto;
-      background: #333;
-      padding: 2em;
-      border-radius: 12px;
-    }
-
-    h1 {
-      text-align: center;
-    }
-
-    label {
-      display: block;
-      margin-top: 1em;
-    }
-
-    input,
-    select {
-      width: 100%;
-      padding: 0.5em;
-      margin-top: 0.5em;
-      border-radius: 4px;
-      border: 1px solid #555;
-      background: #222;
-      color: #eee;
-    }
-
-    button {
-      margin-top: 2em;
-      padding: 0.7em 2em;
-      font-size: 1.1em;
-      border: none;
-      border-radius: 6px;
-      background: #4caf50;
-      color: #fff;
-      cursor: pointer;
-    }
-
-    .error {
-      color: #ff5252;
-      margin-top: 1em;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .button-group {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5em;
-      margin-top: 2em;
-    }
-
-    .button-group button {
-      width: 100%;
-      padding: 1em 0;
-      font-size: 1.1em;
-      border: none;
-      border-radius: 6px;
-      background: #4caf50;
-      color: #fff;
-      cursor: pointer;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <div class="container" id="main-menu">
     <h1>Avalon Game</h1>
     <div class="button-group">
-      <button id="start-btn">Start a New Game</button>
-      <button id="join-btn">Join an Existing Game</button>
-      <button id="review-btn">Review Games</button>
+      <button id="join-btn">Join a Game</button>
+      <button id="admin-btn">Admin Panel</button>
     </div>
   </div>
 
@@ -99,53 +26,91 @@
       <input type="text" id="join-username" required>
       <label for="join-game-id">Game ID:</label>
       <input type="text" id="join-game-id" required>
-      <button type="submit">Join Game</button>
+      <div class="button-row">
+        <button type="submit">Join Game</button>
+        <button id="back-join">Back</button>
+      </div>
       <div class="error" id="join-error"></div>
     </form>
-    <button id="back-join">Back</button>
   </div>
 
-  <!-- Review Games Form -->
-  <div class="container hidden" id="review-container">
-    <h2>Review Games</h2>
-    <form id="review-form">
-      <label for="admin-name">Admin Name:</label>
-      <input type="text" id="admin-name" required>
-      <label for="admin-password">Password:</label>
-      <input type="password" id="admin-password" required>
-      <button type="submit">Show Past Games</button>
-      <div class="error" id="review-error"></div>
+  <!-- Admin Panel Form -->
+  <div class="container hidden" id="admin-container">
+    <h2>Admin Panel</h2>
+    <form id="login-form">
+      <input type="text" id="admin-name" placeholder="Admin Name" required>
+      <input type="password" id="admin-password" placeholder="Password" required>
+
+      <div class="button-row">
+        <button type="submit">Login</button>
+        <button id="back-admin">Back</button>
+      </div>
+      <div class="error" id="login-error"></div>
     </form>
-    <div id="review-list" class="hidden"></div>
-    <button id="back-review">Back</button>
   </div>
 
   <script>
     // Button handlers
-    document.getElementById('start-btn').onclick = function () {
-      window.location.href = 'login.html';
-    };
     document.getElementById('join-btn').onclick = function () {
       document.getElementById('main-menu').classList.add('hidden');
       document.getElementById('join-container').classList.remove('hidden');
     };
-    document.getElementById('review-btn').onclick = function () {
-      document.getElementById('main-menu').classList.add('hidden');
-      document.getElementById('review-container').classList.remove('hidden');
+    document.getElementById('admin-btn').onclick = function () {
+      const adminName = localStorage.getItem('avalon_admin_name');
+      if (adminName) {
+        window.location.href = 'admin.html';
+      } else {
+        document.getElementById('main-menu').classList.add('hidden');
+        document.getElementById('admin-container').classList.remove('hidden');
+      }
     };
     document.getElementById('back-join').onclick = function () {
       document.getElementById('join-container').classList.add('hidden');
       document.getElementById('main-menu').classList.remove('hidden');
     };
-    document.getElementById('back-review').onclick = function () {
-      document.getElementById('review-container').classList.add('hidden');
+    document.getElementById('back-admin').onclick = function () {
+      document.getElementById('admin-container').classList.add('hidden');
       document.getElementById('main-menu').classList.remove('hidden');
     };
 
-    // You can add form submit handlers here for join-form and review-form
-    // Example:
-    // document.getElementById('join-form').onsubmit = function(e) { ... }
-    // document.getElementById('review-form').onsubmit = function(e) { ... }
+    document.getElementById('join-form').onsubmit = async function (e) {
+      e.preventDefault();
+      const username = document.getElementById('join-username').value.trim();
+      const gameId = document.getElementById('join-game-id').value.trim();
+      const joinError = document.getElementById('join-error');
+      joinError.textContent = '';
+
+      if (!username || !gameId) {
+        joinError.textContent = "Please enter both username and Game ID.";
+        return;
+      }
+
+      try {
+        // Store username and gameId for game.html
+        localStorage.setItem('avalon_username', username);
+        localStorage.setItem('avalon_game_id', gameId);
+        // Redirect to game.html
+        window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
+      } catch (err) {
+        joinError.textContent = err.message;
+      }
+    };
+
+
+    // Admin Panel Form Handler
+    document.getElementById('login-form').onsubmit = async function (e) {
+      e.preventDefault();
+      const loginError = document.getElementById('login-error');
+      loginError.textContent = '';
+      const name = document.getElementById('admin-name').value.trim();
+      const password = document.getElementById('admin-password').value;
+      if (!name || !password) {
+        loginError.textContent = "Please enter both name and password.";
+        return;
+      }
+      localStorage.setItem('avalon_admin_name', name);
+      window.location.href = 'admin.html';
+    }
   </script>
 </body>
 
