@@ -24,3 +24,7 @@ firebase init emulators
 
 firebase serve -p 5001 # if 5000 is taken
 ```
+
+## Next JS
+
+To get started, take a look at src/app/page.tsx.
