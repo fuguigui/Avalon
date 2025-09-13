@@ -56,8 +56,12 @@
       document.getElementById('main-menu').classList.add('hidden');
       document.getElementById('join-container').classList.remove('hidden');
     };
+    if (window.location.hash === '#join') {
+      document.getElementById('main-menu').classList.add('hidden');
+      document.getElementById('join-container').classList.remove('hidden');
+    }
     document.getElementById('admin-btn').onclick = function () {
-      const adminName = localStorage.getItem('avalon_admin_name');
+      const adminName = sessionStorage.getItem('admin_name');
       if (adminName) {
         window.location.href = 'admin.html';
       } else {
@@ -87,8 +91,7 @@
       }
 
       try {
-        // Store username and gameId for lobby.html
-        localStorage.setItem('avalon_game_id', gameId);
+        sessionStorage.setItem('username', username);
         // Redirect to lobby.html
         window.location.href = `lobby.html?gameId=${encodeURIComponent(gameId)}`;
       } catch (err) {
@@ -108,7 +111,7 @@
         loginError.textContent = "Please enter both name and password.";
         return;
       }
-      localStorage.setItem('avalon_admin_name', name);
+      sessionStorage.setItem('admin_name', name);
       window.location.href = 'admin.html';
     }
   </script>

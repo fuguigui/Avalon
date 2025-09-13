@@ -19,7 +19,7 @@
         <button id="back-btn">Back</button>
         <div class="hint" id="waiting-hint"></div>
         <div id="game-info"></div>
-        <ul class="user-list" id="user-list"></ul>
+        <div class="user-list" id="user-list"></div>
         <div class="info" id="waiting-info"></div>
         <div class="error" id="game-error"></div>
     </div>
@@ -29,19 +29,22 @@
             collection,
             query,
             where,
+            getDoc,
             getDocs,
             onSnapshot,
             updateDoc,
             doc
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { nameStorageDocId, nameStorageState } from './utils.js';
 
-        // Get gameId from URL or localStorage
+        // Get gameId from URL or sessionStorage
         function getGameId() {
             const params = new URLSearchParams(window.location.search);
-            return params.get('gameId') || localStorage.getItem('avalon_game_id');
+            return params.get('gameId');
         }
+
         const gameId = getGameId();
-        const username = localStorage.getItem('avalon_username');
+        const username = sessionStorage.getItem('username');
         const gameInfo = document.getElementById('game-info');
         const waitingHint = document.getElementById('waiting-hint');
         const userList = document.getElementById('user-list');
@@ -50,29 +53,88 @@
 
         if (!gameId || !username) {
             gameError.textContent = "Missing game or username info.";
-            throw new Error("Missing game or username info.");
+            setTimeout(() => {
+                window.location.href = 'index.html#join';
+            }, 2000); // Show message for 2 seconds, then redirect
         }
 
         document.querySelector('h1').textContent = `Welcome ${username} to Game ${gameId}`;
-        waitingHint.textContent = "Once the game starts, you can leave and rejoin with the same user id and game id.";
+        waitingHint.textContent = "Once the game starts, you can leave and rejoin with the same username and game id.";
+
+        // Assign roles randomly
+        async function assignRoles(docId, gameData) {
+            const { players_human, players_ai, roles, num_ai, num_players } = gameData;
+            let shuffledRoles = roles.slice(0, num_players);
+            for (let i = shuffledRoles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledRoles[i], shuffledRoles[j]] = [shuffledRoles[j], shuffledRoles[i]];
+            }
+            let assignments = {};
+            for (let i = 0; i < num_ai; i++) {
+                assignments[players_ai[i]] = shuffledRoles[i];
+            }
+            // Assign AI roles
+            for (let i = 0; i < players_human.length; i++) {
+                assignments[players_human[i]] = shuffledRoles[num_ai + i];
+            }
+            await updateDoc(doc(db, 'games', docId), {
+                state: "started",
+                assignments: assignments
+            });
+            gameInfo.innerHTML += `<br>Roles assigned! Ready to start.`;
+        }
 
         // Query the game document ONCE, then use its docId for everything
         async function initGameRoom(gameId, username) {
             const gamesRef = collection(db, 'games');
-            const q = query(gamesRef, where('game_id', '==', gameId));
-            const snapshot = await getDocs(q);
-            if (snapshot.empty) {
-                throw new Error("Game not found.");
+            let docId = sessionStorage.getItem(nameStorageDocId(gameId));
+            let data = null;
+            if (docId) {
+                console.log("Found docId in sessionStorage:", docId);
+                const gameDocRef = doc(db, 'games', docId);
+                console.log("Fetching document with docId:", gameDocRef);
+                const snapshot = await getDoc(gameDocRef);
+                if (!snapshot.exists()) {
+                    console.log("No document found with stored docId, will query by gameId");
+                    docId = null; // reset to null to trigger query below
+                } else {
+                    console.log("Document data:", snapshot.data());
+                    data = snapshot.data();
+                }
             }
-            const gameDoc = snapshot.docs[0];
-            const docId = gameDoc.id;
-            const data = gameDoc.data();
+            if (docId == null) {
+                console.log("Querying by gameId");
+                const q = query(gamesRef, where('game_id', '==', gameId));
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    throw new Error("Game not found.");
+                }
+                docId = querySnapshot.docs[0].id;
+                data = querySnapshot.docs[0].data();
+                console.log("Set game docId:", docId);
+                sessionStorage.setItem(nameStorageDocId(gameId), docId);
+                sessionStorage.setItem(nameStorageState(gameId), data.state);
+            }
+            if (!data) {
+                throw new Error("Game data not found.");
+            } else {
+                console.log("Game data:", data);
+            }
+            if (data.state !== 'waiting') {
+                const players_human = data.players_human || [];
+                if (!players_human.includes(username)) {
+                    gameError.textContent = "The game has started. Please join another game.";
+                    throw new Error("The game has started. Please join another game.");
+                } else {
+                    location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
+                }
+            }
 
             // Add user if not already present
-            const players = data.players || [];
-            if (!players.includes(username)) {
+            const players_human = data.players_human || [];
+            if (!players_human.includes(username)) {
                 await updateDoc(doc(db, 'games', docId), {
-                    players: [...players, username]
+                    players_human: [...players_human, username]
                 });
             }
 
@@ -84,26 +146,33 @@
                 }
                 const data = docSnap.data();
                 gameInfo.innerHTML = `
-            <b>Game Code:</b> ${data.game_id}<br>
-            <b>Players Required:</b> ${data.num_players}<br>
-            <b>Roles:</b> ${data.roles.join(', ')}
-        `;
-                userList.innerHTML = '';
-                (data.players || []).forEach(p => {
-                    const li = document.createElement('li');
-                    li.textContent = p;
-                    userList.appendChild(li);
-                });
-                const missing = data.num_players - (data.players ? data.players.length : 0);
+                    <b>Game Code:</b> ${data.game_id}<br>
+                    <b>Require ${data.num_players} Players for roles:</b><br>
+                        <ul>
+                            ${Object.entries(data.roles).map(([role, count]) => `<li>${role}: ${count}</li>`).join('')}
+                        </ul>
+                `;
+                const players_human = data.players_human || [];
+                const players_ai = data.players_ai || [];
+                userList.innerHTML = '<b>Players Joined:</b><ul>' +
+                    players_human.map(p => `<li>${p}</li>`).join('') +
+                    players_ai.map(p => `<li>${p}</li>`).join('') +
+                    '</ul>';
+                const missing = data.num_players - players_human.length - players_ai.length;
                 if (missing > 0) {
                     waitingInfo.textContent = `Waiting for ${missing} more player(s) to join...`;
                 } else {
                     waitingInfo.textContent = "All players have joined! Starting the game...";
                     // Start the game: update state in Firestore
                     if (data.state === 'waiting') {
-                        updateDoc(doc(db, 'games', docId), { state: 'started' });
+                        sessionStorage.setItem(nameStorageState(gameId), 'assigning');
+                        assignRoles(docId, data).catch(err => {
+                            gameError.textContent = err.message;
+                        });
+                        sessionStorage.setItem(nameStorageState(gameId), 'started');
+                        // Redirect game UI here
+                        window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
                     }
-                    // You can redirect or show game UI here
                 }
             });
         }
@@ -113,6 +182,7 @@
 
         initGameRoom(gameId, username).catch(err => {
             gameError.textContent = err.message;
+            window.location.href = 'index.html#join';
         });
 
     </script>

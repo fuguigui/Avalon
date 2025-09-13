@@ -17,12 +17,12 @@
     <div class="container">
         <h2>Game Settings</h2>
         <form id="game-form">
-            <label for="num-players">Total Players (6–10):</label>
-            <input type="number" id="num-players" min="6" max="10" value="6" required>
-
-            <label for="num-ai">AI Players:</label>
-            <input type="number" id="num-ai" min="0" max="9" value="0" required>
-
+            <label for="num-players">Total Players (6–10):
+                <input type="number" id="num-players" min="6" max="10" value="6" required>
+            </label>
+            <label for="num-ai">AI Players:
+                <input type="number" id="num-ai" min="0" max="9" value="0" required>
+            </label>
             <div class="role-list">
                 <label><input type="checkbox" name="roles" value="Merlin" checked> Merlin</label>
                 <label><input type="checkbox" name="roles" value="Assassin" checked> Assassin</label>
@@ -30,9 +30,22 @@
                 <label><input type="checkbox" name="roles" value="Morgana" checked> Morgana</label>
                 <label><input type="checkbox" name="roles" value="Mordred"> Mordred</label>
                 <label><input type="checkbox" name="roles" value="Oberon"> Oberon</label>
-                <label><input type="checkbox" name="roles" value="Loyal Servant" checked> Loyal Servant</label>
-                <label><input type="checkbox" name="roles" value="Minion"> Minion</label>
+                <label>
+                    Loyal Servant:
+                    <input type="number" id="loyal-servant-count" name="loyal-servant-count" min="0" value="2"
+                        style="width: 30px;">
+                </label>
+                <label>
+                    Minion:
+                    <input type="number" id="minion-count" name="minion-count" min="0" value="0" style="width: 30px;">
+                </label>
             </div>
+            <label for="custom-game-id">
+                GameID (optional, max 10 chars):
+                <input type="text" id="custom-game-id" maxlength="10" placeholder="Leave blank for random">
+                <span class="hint">You can enter a custom GameID (max 10 characters). If left blank, a random
+                    6-character GameID will be generated.</span>
+            </label>
 
             <button type="submit" id="start-btn">Start the Game</button>
             <button type="button" class="discard" id="discard-btn">Discard</button>
@@ -46,10 +59,11 @@
         import { db } from './firebase-config.js';
         // Also import the specific Firestore functions you need
         import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { nameStorageDocId, nameStorageState } from './utils.js';
 
 
         // Check admin login
-        if (!localStorage.getItem('avalon_admin_name')) {
+        if (!sessionStorage.getItem('admin_name')) {
             location.href = 'login.html';
         }
         const form = document.getElementById('game-form');
@@ -92,8 +106,34 @@
             infoDiv.textContent = '';
             const numPlayers = parseInt(document.getElementById('num-players').value, 10);
             const numAI = parseInt(document.getElementById('num-ai').value, 10);
+
+            // Get checked roles
             const roleCheckboxes = document.querySelectorAll('input[name="roles"]:checked');
-            const roles = Array.from(roleCheckboxes).map(cb => cb.value);
+            let rolesObj = {};
+            roleCheckboxes.forEach(cb => {
+                rolesObj[cb.value] = 1;
+            });
+            let roles = Array.from(roleCheckboxes).map(cb => cb.value);
+
+            // Get Loyal Servant and Minion counts
+            const loyalServantCount = parseInt(document.getElementById('loyal-servant-count').value, 10);
+            const minionCount = parseInt(document.getElementById('minion-count').value, 10);
+
+            // Add Loyal Servant and Minion counts
+            if (loyalServantCount > 0) {
+                rolesObj["Loyal Servant"] = loyalServantCount;
+            }
+            if (minionCount > 0) {
+                rolesObj["Minion"] = minionCount;
+            }
+
+            // Validate total roles
+            const totalRoles = Object.values(rolesObj).reduce((a, b) => a + b, 0);
+            if (totalRoles !== numPlayers) {
+                errorDiv.textContent = `Total roles (${totalRoles}) must equal number of players (${numPlayers}).`;
+                return;
+            }
+
             if (numPlayers < 6 || numPlayers > 10) {
                 errorDiv.textContent = "Players must be 6–10.";
                 return;
@@ -102,27 +142,37 @@
                 errorDiv.textContent = "AI players must be between 0 and total players.";
                 return;
             }
-            if (roles.length > numPlayers) {
-                errorDiv.textContent = "Too many roles selected for all players.";
-                return;
+            const aiPlayers = Array.from({ length: numAI }, (_, i) => `AI ${i + 1}`);
+            // Use custom GameID if provided, else generate a random 6-character GameID.
+            const customGameId = document.getElementById('custom-game-id').value.trim();
+            let gameCode;
+            if (customGameId) {
+                if (customGameId.length > 10) {
+                    errorDiv.textContent = "GameID must be 10 characters or less.";
+                    return;
+                }
+                gameCode = customGameId;
+            } else {
+                gameCode = Math.random().toString(36).substr(2, 6).toUpperCase();
             }
-            // Generate a game code
-            const gameCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+
             // Create game in Firestore
             try {
                 // Use the 'db' instance imported from firebase-config.js
                 const docRef = await addDoc(collection(db, "games"), {
                     game_id: gameCode,
-                    admin_id: localStorage.getItem('avalon_admin_name'),
+                    admin_id: sessionStorage.getItem('admin_name'),
                     created_at: serverTimestamp(),
                     state: "waiting",
                     num_players: numPlayers,
                     num_ai: numAI,
-                    roles: roles,
-                    players: [],
+                    roles: rolesObj,
+                    players_human: [],
+                    players_ai: aiPlayers,
                     assignments: {},
                 });
-                localStorage.setItem('avalon_game_id', docRef.id);
+                sessionStorage.setItem(nameStorageDocId(gameCode), docRef.id);
+                sessionStorage.setItem(nameStorageState(gameCode), "waiting");
 
                 let secondsLeft = 5;
                 infoDiv.innerHTML = `
@@ -134,7 +184,7 @@
             <rect x="3" y="3" width="13" height="13" rx="2" fill="currentColor"/>
           </svg>
           </div>
-          Redirecting to the game lobby in <span id="countdown">${secondsLeft}</span> seconds...
+          Redirecting to the homepage in <span id="countdown">${secondsLeft}</span> seconds...
         `;
                 form.reset();
 
