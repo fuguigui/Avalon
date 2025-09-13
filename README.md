@@ -25,6 +25,22 @@ firebase init emulators
 firebase serve -p 5001 # if 5000 is taken
 ```
 
+### TS version
+
+1. in one terminal, run
+```
+firebase emulators:start --project avalon-c2f49
+```
+2. In a new terminal
+
+```
+npm i
+npm run dev
+```
+3. in the browser, open the URL shown by the second termial
+
 ## Next JS
 
 To get started, take a look at src/app/page.tsx.
+
+npm ci && npm run build

@@ -2,6 +2,7 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  distDir: 'functions/src',
   typescript: {
     ignoreBuildErrors: true,
   },
