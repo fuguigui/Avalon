@@ -44,7 +44,6 @@
 
         // Import 'db' (your Firestore instance) from the firebase-config.js file
         import { db } from './firebase-config.js';
-
         // Also import the specific Firestore functions you need
         import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -125,19 +124,6 @@
                 });
                 localStorage.setItem('avalon_game_id', docRef.id);
 
-                // await db.collection('games').add({
-                //   admin: localStorage.getItem('avalon_admin_name'),
-                //   gameCode,
-                //   numPlayers,
-                //   numAI,
-                //   roles,
-                //   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                //   state: 'waiting',
-                //   players: [],
-                //   assignments: {},
-                //   quest: null,
-                //   votes: [],
-                // });
                 let secondsLeft = 5;
                 infoDiv.innerHTML = `
           Game created!<br>
@@ -148,7 +134,7 @@
             <rect x="3" y="3" width="13" height="13" rx="2" fill="currentColor"/>
           </svg>
           </div>
-          Redirecting to home in <span id="countdown">${secondsLeft}</span> seconds...
+          Redirecting to the game lobby in <span id="countdown">${secondsLeft}</span> seconds...
         `;
                 form.reset();
 

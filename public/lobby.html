@@ -1,0 +1,121 @@
+<!-- lobby.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Avalon Game Lobby</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+    <script type="module" src="firebase-config.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Game Lobby</h1>
+        <button id="back-btn">Back</button>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <ul class="user-list" id="user-list"></ul>
+        <div class="info" id="waiting-info"></div>
+        <div class="error" id="game-error"></div>
+    </div>
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import {
+            collection,
+            query,
+            where,
+            getDocs,
+            onSnapshot,
+            updateDoc,
+            doc
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Get gameId from URL or localStorage
+        function getGameId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('gameId') || localStorage.getItem('avalon_game_id');
+        }
+        const gameId = getGameId();
+        const username = localStorage.getItem('avalon_username');
+        const gameInfo = document.getElementById('game-info');
+        const waitingHint = document.getElementById('waiting-hint');
+        const userList = document.getElementById('user-list');
+        const waitingInfo = document.getElementById('waiting-info');
+        const gameError = document.getElementById('game-error');
+
+        if (!gameId || !username) {
+            gameError.textContent = "Missing game or username info.";
+            throw new Error("Missing game or username info.");
+        }
+
+        document.querySelector('h1').textContent = `Welcome ${username} to Game ${gameId}`;
+        waitingHint.textContent = "Once the game starts, you can leave and rejoin with the same user id and game id.";
+
+        // Query the game document ONCE, then use its docId for everything
+        async function initGameRoom(gameId, username) {
+            const gamesRef = collection(db, 'games');
+            const q = query(gamesRef, where('game_id', '==', gameId));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) {
+                throw new Error("Game not found.");
+            }
+            const gameDoc = snapshot.docs[0];
+            const docId = gameDoc.id;
+            const data = gameDoc.data();
+
+            // Add user if not already present
+            const players = data.players || [];
+            if (!players.includes(username)) {
+                await updateDoc(doc(db, 'games', docId), {
+                    players: [...players, username]
+                });
+            }
+
+            // Listen for game changes using docId
+            onSnapshot(doc(db, 'games', docId), (docSnap) => {
+                if (!docSnap.exists()) {
+                    gameError.textContent = "Game not found.";
+                    return;
+                }
+                const data = docSnap.data();
+                gameInfo.innerHTML = `
+            <b>Game Code:</b> ${data.game_id}<br>
+            <b>Players Required:</b> ${data.num_players}<br>
+            <b>Roles:</b> ${data.roles.join(', ')}
+        `;
+                userList.innerHTML = '';
+                (data.players || []).forEach(p => {
+                    const li = document.createElement('li');
+                    li.textContent = p;
+                    userList.appendChild(li);
+                });
+                const missing = data.num_players - (data.players ? data.players.length : 0);
+                if (missing > 0) {
+                    waitingInfo.textContent = `Waiting for ${missing} more player(s) to join...`;
+                } else {
+                    waitingInfo.textContent = "All players have joined! Starting the game...";
+                    // Start the game: update state in Firestore
+                    if (data.state === 'waiting') {
+                        updateDoc(doc(db, 'games', docId), { state: 'started' });
+                    }
+                    // You can redirect or show game UI here
+                }
+            });
+        }
+        document.getElementById('back-btn').onclick = function () {
+            window.location.href = 'index.html';
+        };
+
+        initGameRoom(gameId, username).catch(err => {
+            gameError.textContent = err.message;
+        });
+
+    </script>
+</body>
+
+</html>

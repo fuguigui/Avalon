@@ -87,11 +87,10 @@
       }
 
       try {
-        // Store username and gameId for game.html
-        localStorage.setItem('avalon_username', username);
+        // Store username and gameId for lobby.html
         localStorage.setItem('avalon_game_id', gameId);
-        // Redirect to game.html
-        window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
+        // Redirect to lobby.html
+        window.location.href = `lobby.html?gameId=${encodeURIComponent(gameId)}`;
       } catch (err) {
         joinError.textContent = err.message;
       }
