@@ -182,7 +182,7 @@
                     Redirecting to the homepage in <span id="countdown">${secondsLeft}</span> seconds...
                     `;
                 form.reset();
-
+                startBtn.disabled = true
                 // Copy icon event
                 const copyIcon = document.getElementById('copy-icon');
                 const gameIdElem = document.getElementById('game-id');

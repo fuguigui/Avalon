@@ -37,8 +37,8 @@
     <div class="container hidden" id="team-selection-container">
         <h2>Select the quest team </h2>
         <div class="grid">
-            <div class="game-board" , id="game-board"></div>
             <div class="selection-panel" , id="selection-panel"></div>
+            <div class="game-board" , id="game-board"></div>
         </div>
     </div>
     <!-- team building Panel -->
@@ -217,8 +217,69 @@
             }
         }
 
+        async function showTeamSelection(players, teamSize, docId, gameData) {
+            const container = document.getElementById("team-selection-container");
+            container.innerHTML = `
+            <form id="team-select-form">
+                <b>Select ${teamSize} players for the quest team:</b><br>
+            </form>
+            <div class="error" id="team-select-error"></div>
+            <button id="submit-team-btn" disabled>Submit Team</button>`;
 
-        async function buildTeam(username, gameData) {
+            const form = container.querySelector('#team-select-form');
+            players.forEach(player => {
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.innerHTML = `<input type="checkbox" name="team-player" value="${player}"> ${player}`;
+                form.appendChild(label);
+            });
+
+            const errorDiv = container.querySelector('#team-select-error');
+            const submitBtn = container.querySelector('#submit-team-btn');
+
+            form.addEventListener('change', () => {
+                const checked = form.querySelectorAll('input[type="checkbox"]:checked');
+                if (checked.length > teamSize) {
+                    errorDiv.textContent = `You can only select ${teamSize} players.`;
+                    // Uncheck the last one
+                    checked[checked.length - 1].checked = false;
+                } else if (checked.length < teamSize) {
+                    errorDiv.textContent = `Please select exactly ${teamSize} players.`;
+                    submitBtn.disabled = true;
+                } else {
+                    errorDiv.textContent = '';
+                    submitBtn.disabled = false;
+                }
+            });
+
+            submitBtn.onclick = async (e) => {
+                e.preventDefault();
+                const checked = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+                if (checked.length !== teamSize) {
+                    errorDiv.textContent = `Please select exactly ${teamSize} players.`;
+                    return;
+                }
+                // Clone the current_phase object to avoid mutating state directly
+                const currentPhase = { ...gameData.current_phase };
+                // Get the last team_building phase
+                const teamBuildingPhases = currentPhase.team_building.slice();
+                const lastTeamBuilding = { ...teamBuildingPhases[teamBuildingPhases.length - 1] };
+                // Update the proposal
+                lastTeamBuilding.proposal = checked;
+                // Replace the last phase with the updated one
+                teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
+                currentPhase.team_building = teamBuildingPhases;
+
+                // Update Firestore
+                await updateDoc(doc(db, 'games', docId), {
+                    'current_phase': currentPhase,
+                    'status': 'team-vote'
+                });
+                submitBtn.disabled = true;
+            };
+        }
+
+        async function buildTeam(username, docId, gameData) {
             document.getElementById('team-selection-container').classList.remove('hidden');
             document.getElementById('reveal-container').classList.add('hidden');
             document.getElementById('lobby-container').classList.add('hidden');
@@ -228,8 +289,135 @@
                 return;
             } else {
                 const teamSize = getTeamSize(gameData.num_players, gameData.current_phase.quest);
-                document.getElementById('team-selection-container').innerHTML += `<p>You are the leader. Please select the quest team of ${teamSize}.</p>`;
+                await showTeamSelection(gameData.players, teamSize, docId, gameData).catch(err => {
+                    gameError.textContent = err.message;
+                });
             }
+        }
+
+        async function checkVotesAndProceed(voted, docId, gameData) {
+            console.log("All players have voted. Checking votes...");
+            const currentPhase = { ...gameData.current_phase };
+            const players = gameData.players || [];
+            const teamBuildingPhases = currentPhase.team_building.slice();
+            const lastTeamBuilding = { ...teamBuildingPhases[teamBuildingPhases.length - 1] };
+
+            // Count votes
+            let approveCount = 0;
+            let totalVotes = 0;
+            Object.values(voted).forEach(vote => {
+                if (vote === "Approve") approveCount++;
+                totalVotes++;
+            });
+
+            // Majority calculation
+            const majority = Math.floor(players.length / 2) + 1;
+            console.log(`Votes: ${approveCount} approve out of ${totalVotes}. Majority is ${majority}.`);
+            let status = "quest";
+            if (approveCount >= majority) {
+                // Passed: update votes_status and proceed to quest
+                lastTeamBuilding.votes_status = "Passed";
+                teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
+                currentPhase.team_building = teamBuildingPhases;
+            } else {
+                // Failed: update votes_status, add new team_building phase
+                lastTeamBuilding.votes_status = "Failed";
+                teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
+
+                // Find next leader
+                const currentLeader = lastTeamBuilding.leader;
+                const currentLeaderIdx = players.indexOf(currentLeader);
+                const nextLeader = players[(currentLeaderIdx + 1) % players.length];
+
+                // Add new team_building phase
+                teamBuildingPhases.push({
+                    leader: nextLeader,
+                });
+
+                currentPhase.team_building = teamBuildingPhases;
+                status = "team-selection";
+            }
+
+            // Update Firestore
+            await updateDoc(doc(db, 'games', docId), {
+                current_phase: currentPhase, status: status
+            });
+        }
+
+        async function voteTeam(username, docId, gameData) {
+            document.getElementById('team-vote-container').classList.remove('hidden');
+            document.getElementById('team-selection-container').classList.add('hidden');
+            document.getElementById('reveal-container').classList.add('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+
+            const votePanel = document.querySelector("#team-vote-container #selection-vote");
+            const proposal = gameData.current_phase.team_building.slice(-1)[0].proposal || [];
+
+            votePanel.innerHTML = `
+                <b>Proposed Team:</b>
+                <ul>
+                    ${proposal.map(p => `<li>${p}</li>`).join('')}
+                </ul>
+                <form id="team-vote-form">
+                    <b>Vote to Approve or Reject the team:</b><br>
+                    <label><input type="radio" name="vote" value="Approve"> Approve</label><br>
+                    <label><input type="radio" name="vote" value="Reject"> Reject</label><br>
+                </form>
+                <div class="info" id="team-vote-info"></div>
+                <button id="submit-vote-btn" disabled>Submit Vote</button>
+            `;
+            const form = votePanel.querySelector('#team-vote-form');
+            const infoDiv = votePanel.querySelector('#team-vote-info');
+            const submitBtn = votePanel.querySelector('#submit-vote-btn');
+
+            console.log("Listening to user to vote:", username);
+            // Enable submit only when a vote is selected
+            form.addEventListener('change', () => {
+                const selected = form.querySelector('input[name="vote"]:checked');
+                if (!selected) {
+                    submitBtn.disabled = true;
+                } else {
+                    submitBtn.disabled = false;
+                }
+            });
+            console.log("Before click the submit button");
+            // Prevent double voting and update Firestore
+            submitBtn.onclick = async (e) => {
+                const selected = form.querySelector('input[name="vote"]:checked');
+                if (!selected) {
+                    gameError.textContent = `Nothing selected. Failed to submit vote.`;
+                    return;
+                }
+                // Update the votes in Firestore
+                const currentPhase = { ...gameData.current_phase };
+                const teamBuildingPhases = currentPhase.team_building.slice();
+                let lastTeamBuilding = { ...teamBuildingPhases[teamBuildingPhases.length - 1] };
+                if (!lastTeamBuilding.votes) lastTeamBuilding.votes = {};
+                lastTeamBuilding.votes[username] = selected.value;
+                teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
+                currentPhase.team_building = teamBuildingPhases;
+
+                await updateDoc(doc(db, 'games', docId), {
+                    'current_phase': currentPhase
+                });
+
+                // Disable all inputs
+                submitBtn.disabled = true;
+                Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+
+                const voted = gameData.current_phase.team_building.slice(-1)[0].votes || {};
+                const votedPlayers = Object.keys(voted);
+                const unvote = gameData.players.filter(p => !votedPlayers.includes(p));
+                console.log("Unvoted players:", unvote);
+                if (unvote.length < 1) {
+                    // All players have voted, the next step will be handled by the onSnapshot listener
+                    infoDiv.textContent = `Your vote "${selected.value}" has been submitted. All players have voted.`;
+                    checkVotesAndProceed(voted, docId, gameData);
+                } else {
+                    // Some players haven't voted yet
+                    infoDiv.textContent = `Your vote "${selected.value}" has been submitted. Waiting for player(s) ${unvote.join(', ')} to submit their votes...`;
+                }
+            };
         }
 
         async function gameBoard() {
@@ -287,7 +475,7 @@
                         });
                         break;
                     case "team-selection":
-                        await buildTeam(username, data).catch(err => {
+                        await buildTeam(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
@@ -295,7 +483,12 @@
                         });
                         break;
                     case "team-vote":
-                        gameError.textContent = "Team voting phase not implemented yet.";
+                        await voteTeam(username, docId, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
                         break;
                     case "quest":
                         gameError.textContent = "Quest phase not implemented yet.";
