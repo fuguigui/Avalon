@@ -15,20 +15,77 @@
 
 
 <body>
-    <div class="container">
+    <div class="container" id="main-menu">
         <h1>Game Room</h1>
         <button id="back-btn">Back to Home</button>
         <div class="error" id="game-error"></div>
     </div>
+    <!-- Lobby Panel -->
+    <div class="container" id="lobby-container">
+        <h2>Lobby Room</h2>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <div class="user-list" id="user-list"></div>
+        <div class="info" id="waiting-info"></div>
+    </div>
+    <!-- Reveal Panel -->
+    <div class="container hidden" id="reveal-container">
+        <h2>Your role is </h2>
+        <div class="info" id="waiting-info"></div>
+    </div>
+    <!-- team selection Panel -->
+    <div class="container hidden" id="team-selection-container">
+        <h2>Select the quest team </h2>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <div class="user-list" id="user-list"></div>
+        <div class="info" id="waiting-info"></div>
+    </div>
+    <!-- team building Panel -->
+    <div class="container hidden" id="team-building-container">
+        <h2>Vote for the quest team </h2>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <div class="user-list" id="user-list"></div>
+        <div class="info" id="waiting-info"></div>
+    </div>
+    <!-- Quest Panel -->
+    <div class="container hidden" id="quest-container">
+        <h2>Quest </h2>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <div class="user-list" id="user-list"></div>
+        <div class="info" id="waiting-info"></div>
+    </div>
+    <!-- Game Over Panel -->
+    <div class="container hidden" id="game-over-container">
+        <h2>Game Over </h2>
+        <div class="hint" id="waiting-hint"></div>
+        <div id="game-info"></div>
+        <div class="user-list" id="user-list"></div>
+        <div class="info" id="waiting-info"></div>
+    </div>
+
     <script type="module">
         import { db } from './firebase-config.js';
-        import { collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { fetchRole, fetchKnownRoles, nameStorageDocId, nameStorageState } from './utils.js';
+        import {
+            collection,
+            query,
+            where,
+            getDoc,
+            getDocs,
+            onSnapshot,
+            updateDoc,
+            doc
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // Get gameId and username
         const params = new URLSearchParams(window.location.search);
         const gameId = params.get('gameId');
         const username = sessionStorage.getItem('username');
         const gameError = document.getElementById('game-error');
+        const statusOrders = ["lobby", "reveal", "team_building", "quest", "assassination", "game_over", "finished"];
 
         document.getElementById('back-btn').onclick = function () {
             window.location.href = 'index.html';
@@ -38,33 +95,238 @@
             gameError.textContent = "Missing game or username info.";
             setTimeout(() => {
                 window.location.href = 'index.html#join';
-            }, 2000); // Show message for 2 seconds, then redirect
+            }, 3000); // Show message for 2 seconds, then redirect
+        }
+        document.title = `Game Room - ${gameId}`;
+
+        // Assign roles randomly
+        async function assignRoles(docId, gameData) {
+            const { players, roles, num_players } = gameData;
+            // Convert roles object to array of role names
+            let rolesArr = [];
+            Object.entries(roles).forEach(([role, count]) => {
+                for (let i = 0; i < count; i++) {
+                    rolesArr.push(role);
+                }
+            });
+            let shuffledRoles = rolesArr.slice();
+            for (let i = shuffledRoles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledRoles[i], shuffledRoles[j]] = [shuffledRoles[j], shuffledRoles[i]];
+            }
+            const leader_id = Math.floor(Math.random() * num_players);
+            let leader = null;
+            let assignments = {}; // player -> role
+            let roles_to_players = {}; // role -> list of players
+            for (let i = 0; i < num_players; i++) {
+                let player = players[i];
+                if (i === leader_id) {
+                    leader = player;
+                }
+                assignments[player] = shuffledRoles[i];
+                if (!roles_to_players[shuffledRoles[i]]) {
+                    roles_to_players[shuffledRoles[i]] = [];
+                }
+                roles_to_players[shuffledRoles[i]].push(player);
+            }
+            // Choose the leader.
+            await updateDoc(doc(db, 'games', docId), {
+                status: "reveal",
+                players_to_roles: assignments,
+                roles_to_players: roles_to_players,
+                current_phase: {
+                    quest: 1,
+                    team_building: [{
+                        leader: leader
+                    }]
+                }
+
+            });
         }
 
-        async function fetchCurrentStatus() {
+        async function revealRole(username, gameData) {
+            const role = fetchRole(username, gameData);
+            const knownRoles = fetchKnownRoles(role, gameData);
+            console.log("Player role:", role);
+            console.log("Known roles:", knownRoles);
+            document.getElementById('reveal-container').classList.remove('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            document.querySelector('#reveal-container h2').textContent = `Your role is ${role}`;
+            if (knownRoles.length > 0) {
+                document.getElementById('reveal-container').innerHTML += `<p>You can see these players: ${knownRoles.join(', ')}</p>`;
+            } else {
+                document.getElementById('reveal-container').innerHTML += `<p>You don't know any information about other players.</p>`;
+            }
+            let revealed_players = data.revealed_players || [];
+            if (!revealed_players.includes(username)) {
+                await updateDoc(doc(db, 'games', docId), {
+                    revealed_players: [...revealed_players, username]
+                });
+            }
+            revealed_players = data.revealed_players || [];
+            const missing = data.num_players - revealed_players.length;
+            if (missing < 1) {
+                if (data.status === 'reveal') {
+                    await updateDoc(doc(db, 'games', docId), {
+                        status: "team-selection",
+                    });
+                }
+            } else {
+                let unrevealed = data.players.filter(p => !revealed_players.includes(p));
+                document.querySelector('#reveal-container waiting-info').textContent = `Waiting for player(s) ${unrevealed.join(', ')} to reveal their roles...`;
+            }
+        }
+
+        // Query the game document ONCE, then use its docId for everything
+        async function initGameInLobby(username, docId, data) {
+            // Add user if not already present
+            let players = data.players || [];
+            if (!players.includes(username)) {
+                await updateDoc(doc(db, 'games', docId), {
+                    players: [...players, username]
+                });
+            }
+            // Listen for game changes using docId
+            const lobbyGameInfo = document.querySelector('#lobby-container #game-info');
+            lobbyGameInfo.innerHTML = `
+                    <b>Game Code:</b> ${data.game_id}<br>
+                    <b>Require ${data.num_players} Players for roles:</b><br>
+                    <ul>
+                        ${Object.entries(data.roles).map(([role, count]) => `<li>${role}: ${count}</li>`).join('')}
+                    </ul>
+                `;
+            players = data.players || [];
+            const lobbyUserList = document.querySelector('#lobby-container #user-list');
+            lobbyUserList.innerHTML = '<b>Players Joined:</b><ul>' +
+                players.map(p => `<li>${p}</li>`).join('') +
+                '</ul>';
+            const missing = data.num_players - players.length;
+            const lobbyWaitingInfo = document.querySelector('#lobby-container #waiting-info');
+            if (missing > 0) {
+                lobbyWaitingInfo.textContent = `Waiting for ${missing} more player(s) to join...`;
+            } else {
+                lobbyWaitingInfo.textContent = "All players have joined! Starting the game...";
+                if (data.status === 'lobby') {
+                    assignRoles(docId, data).catch(err => {
+                        gameError.textContent = err.message;
+                    });
+                    lobbyGameInfo.innerHTML += `<br>Roles assigned! Ready to start.`;
+                }
+            }
+        }
+        document.getElementById('back-btn').onclick = function () {
+            window.location.href = 'index.html';
+        };
+
+        async function gameBoard() {
             // Find game doc by game_id
             const gamesRef = collection(db, 'games');
-            const q = query(gamesRef, where('game_id', '==', gameId));
-            const snapshot = await getDocs(q);
-            if (snapshot.empty) {
-                throw new Error("Wooops, game not found. Consider joining another game.");
+            let docId = sessionStorage.getItem(nameStorageDocId(gameId));
+            let data = null;
+            if (docId) {
+                const gameDocRef = doc(db, 'games', docId);
+                const snapshot = await getDoc(gameDocRef);
+                if (snapshot.exists()) {
+                    data = snapshot.data();
+                } else {
+                    docId = null;
+                }
             }
-            const gameDoc = snapshot.docs[0];
-            const data = gameDoc.data();
-            const assignments = data.assignments || {};
-            const role = assignments[username];
-            if (!role) {
-                throw new Error("Wooops, you are not part of this game. Consider joining another game.");
+            if (!docId) {
+                const q = query(gamesRef, where('game_id', '==', gameId));
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    throw new Error("Game not found.");
+                }
+                docId = querySnapshot.docs[0].id;
+                sessionStorage.setItem(nameStorageDocId(gameId), docId);
             }
-            const container = document.querySelector('.container');
-            const roleDiv = document.createElement('div');
-            roleDiv.innerHTML = `<h2>You are ${role}!</h2>`;
-            container.appendChild(roleDiv);
+            console.log("Using docId:", docId);
+            onSnapshot(doc(db, 'games', docId), async (docSnap) => {
+                if (!docSnap.exists()) {
+                    gameError.textContent = "Game not found.";
+                    return;
+                }
+                const data = docSnap.data();
+                let status = data.status
+                console.log("Game status:", status);
+                console.log("Game state:", data);
+                if (status === "finished") {
+                    throw new Error("Game has finished. Please join another game.");
+                    return;
+                }
+                switch (status) {
+                    case "lobby":
+                        await initGameInLobby(username, docId, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
+                        break;
+                    case "reveal":
+                        await revealRole(username, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
+                        break;
+                    case "team-selection":
+                        gameError.textContent = "Team selection phase not implemented yet.";
+                        break;
+                    case "team_building":
+                        gameError.textContent = "Team building phase not implemented yet.";
+                        break;
+                    case "quest":
+                        gameError.textContent = "Quest phase not implemented yet.";
+                        break;
+                    case "assassination":
+                        gameError.textContent = "Assassination phase not implemented yet.";
+                        break;
+                    case "game_over":
+                        gameError.textContent = "Game over phase not implemented yet.";
+                    default:
+                        throw new Error("Game state not recognized.");
+                }
+            });
+            // let phase = data.current_phase;
+            // const role = await fetchRole(username, data);
+            // document.body.innerHTML += `<h2>Your Role: ${role}!</h2>`;
+            // document.body.innerHTML += `<h1>Quest ${phase.quest}</h1>`;
+
+            // const teamBuildingPhases = current_phase.team_building;
+            // const latestTeamBuilding = teamBuildingPhases[teamBuildingPhases.length - 1];
+            // const votesStatus = latestTeamBuilding.votes_status;
+            // if (votesStatus === "Passed") {
+            //     // Show quest phase
+            //     const quest = current_phase.quest;
+            //     document.body.innerHTML += `
+            //         <div>
+            //             <p>Cards: ${quest.cards.map(card => Object.entries(card)[0].join(': ')).join(', ')}</p>
+            //             <p>Cards Revealed: ${quest.cards_revealed.join(', ')}</p>
+            //             <p>Quest Result: ${quest.quest_result}</p>
+            //         </div>
+            //     `;
+            // } else {
+            //     // Show team building phase
+            //     document.body.innerHTML += `
+            //         <div>
+            //             <h3>Team Building</h3>
+            //             <p>Leader: ${latestTeamBuilding.leader}</p>
+            //         </div>
+            //     `;
+            //     if (votesStatus === "Failed") {
+            //         document.body.innerHTML += `<p>Team vote failed. New team building phase will start.</p>`;
+            //     }
+            // }
         }
 
-        fetchCurrentStatus().catch(err => {
+        gameBoard().catch(err => {
             gameError.textContent = err.message;
-            window.location.href = 'index.html#join';
+            setTimeout(() => {
+                window.location.href = 'index.html#join';
+            }, 5000);
         });
     </script>
 </body>

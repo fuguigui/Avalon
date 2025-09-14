@@ -37,7 +37,8 @@
                 </label>
                 <label>
                     Minion:
-                    <input type="number" id="minion-count" name="minion-count" min="0" max="3" value="0" style="width: 30px;">
+                    <input type="number" id="minion-count" name="minion-count" min="0" max="3" value="0"
+                        style="width: 30px;">
                 </label>
             </div>
             <label for="custom-game-id">
@@ -69,6 +70,7 @@
         const form = document.getElementById('game-form');
         const errorDiv = document.getElementById('game-error');
         const infoDiv = document.getElementById('game-info');
+        const startBtn = document.getElementById('start-btn');
         const discardBtn = document.getElementById('discard-btn');
         const numPlayersInput = document.getElementById('num-players');
         const numAIInput = document.getElementById('num-ai');
@@ -98,6 +100,10 @@
 
         discardBtn.onclick = () => {
             window.location.href = 'admin.html';
+        };
+        startBtn.onclick = () => {
+            sessionStorage.setItem('username', sessionStorage.getItem('admin_name'));
+            window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
         };
 
         form.onsubmit = async (e) => {
@@ -148,43 +154,39 @@
             let gameCode;
             if (customGameId) {
                 if (customGameId.length > 10) {
-                    errorDiv.textContent = "GameID must be 10 characters or less.";
-                    return;
+                    errorDiv.textContent = "GameID must be 10 characters or less. Use a random ID instead.";
+                } else {
+                    gameCode = customGameId;
                 }
-                gameCode = customGameId;
-            } else {
+            }
+            if (!gameCode) {
                 gameCode = Math.random().toString(36).substr(2, 6).toUpperCase();
             }
-
-            // Create game in Firestore
             try {
-                // Use the 'db' instance imported from firebase-config.js
                 const docRef = await addDoc(collection(db, "games"), {
                     game_id: gameCode,
                     admin_id: sessionStorage.getItem('admin_name'),
                     created_at: serverTimestamp(),
-                    state: "waiting",
+                    status: "lobby",
                     num_players: numPlayers,
-                    num_ai: numAI,
                     roles: rolesObj,
                     players: aiPlayers,
                     assignments: {},
                 });
                 sessionStorage.setItem(nameStorageDocId(gameCode), docRef.id);
-                sessionStorage.setItem(nameStorageState(gameCode), "waiting");
 
                 let secondsLeft = 5;
                 infoDiv.innerHTML = `
-          Game created!<br>
-          <div class="game-id-row">
-          Game ID: <b id="game-id">${gameCode}</b><br>
-          <svg id="copy-icon" class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            <rect x="9" y="9" width="13" height="13" rx="2" fill="currentColor" opacity="0.5"/>
-            <rect x="3" y="3" width="13" height="13" rx="2" fill="currentColor"/>
-          </svg>
-          </div>
-          Redirecting to the homepage in <span id="countdown">${secondsLeft}</span> seconds...
-        `;
+                    Game created!<br>
+                    <div class="game-id-row">
+                    Game ID: <b id="game-id">${gameCode}</b><br>
+                    <svg id="copy-icon" class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <rect x="9" y="9" width="13" height="13" rx="2" fill="currentColor" opacity="0.5"/>
+                        <rect x="3" y="3" width="13" height="13" rx="2" fill="currentColor"/>
+                    </svg>
+                    </div>
+                    Redirecting to the homepage in <span id="countdown">${secondsLeft}</span> seconds...
+                    `;
                 form.reset();
 
                 // Copy icon event

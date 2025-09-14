@@ -92,8 +92,7 @@
 
       try {
         sessionStorage.setItem('username', username);
-        // Redirect to lobby.html
-        window.location.href = `lobby.html?gameId=${encodeURIComponent(gameId)}`;
+        window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
       } catch (err) {
         joinError.textContent = err.message;
       }
