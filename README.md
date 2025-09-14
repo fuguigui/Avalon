@@ -9,9 +9,27 @@ Each game document contains
   "roles": ["Merlin", "Assassin", ...],
   "createdAt": <timestamp>,
   "state": "waiting", // or "started", "finished"
-  "assignments": { "user1": "Merlin", "user2": "Assassin", ... },
+  "assignments": { "user1": "Merlin", "user2": "Assassin", },
+  "role_to_players": { "Merlin": "user1", "Assasin": "user3": },
   "quest": null,
-  "votes": []
+  "votes": [],
+  "current_phase": {
+    "quest_number": 1, 
+    "team_building": [{
+      "leader": "player_a", 
+      "proposal": ["player_a", "player_b", ], 
+      "votes": {"player_a": "Approve", "player_b": "Reject"},
+      "votes_status": "Collecting/Revealing/Passed/Failed"
+    }],
+    "quest": {
+      "cards": [{"player_a": "Success"}, {"player_b": "Fail"}],
+      "cards_revealed": ["Success", "Success", "Fail"],
+      "quest_result": "Collecting/Revealing/Success/Fail"
+    },
+    "Assasin": "null/player_t"
+  },
+  "past_phases": [...],
+  "winner": "Good/Evil"
 }
 ```
 
@@ -31,3 +49,8 @@ firebase serve -p 5001 # if 5000 is taken
 ```
 firebase deploy
 ```
+
+Function ideas:
+
+- In the start.html page: distinguish good and evil by icons
+- Check the game setup: by the number of good and evil player number

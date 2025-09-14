@@ -17,9 +17,55 @@
 <body>
     <div class="container">
         <h1>Game Room</h1>
-        <button id="back-btn">Back</button>
+        <button id="back-btn">Back to Home</button>
+        <div class="error" id="game-error"></div>
     </div>
     <script type="module">
+        import { db } from './firebase-config.js';
+        import { collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Get gameId and username
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get('gameId');
+        const username = sessionStorage.getItem('username');
+        const gameError = document.getElementById('game-error');
+
+        document.getElementById('back-btn').onclick = function () {
+            window.location.href = 'index.html';
+        };
+
+        if (!gameId || !username) {
+            gameError.textContent = "Missing game or username info.";
+            setTimeout(() => {
+                window.location.href = 'index.html#join';
+            }, 2000); // Show message for 2 seconds, then redirect
+        }
+
+        async function fetchCurrentStatus() {
+            // Find game doc by game_id
+            const gamesRef = collection(db, 'games');
+            const q = query(gamesRef, where('game_id', '==', gameId));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) {
+                throw new Error("Wooops, game not found. Consider joining another game.");
+            }
+            const gameDoc = snapshot.docs[0];
+            const data = gameDoc.data();
+            const assignments = data.assignments || {};
+            const role = assignments[username];
+            if (!role) {
+                throw new Error("Wooops, you are not part of this game. Consider joining another game.");
+            }
+            const container = document.querySelector('.container');
+            const roleDiv = document.createElement('div');
+            roleDiv.innerHTML = `<h2>You are ${role}!</h2>`;
+            container.appendChild(roleDiv);
+        }
+
+        fetchCurrentStatus().catch(err => {
+            gameError.textContent = err.message;
+            window.location.href = 'index.html#join';
+        });
     </script>
 </body>
 

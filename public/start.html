@@ -17,8 +17,8 @@
     <div class="container">
         <h2>Game Settings</h2>
         <form id="game-form">
-            <label for="num-players">Total Players (6–10):
-                <input type="number" id="num-players" min="6" max="10" value="6" required>
+            <label for="num-players">Total Players (5–10):
+                <input type="number" id="num-players" min="5" max="10" value="5" required>
             </label>
             <label for="num-ai">AI Players:
                 <input type="number" id="num-ai" min="0" max="9" value="0" required>
@@ -32,12 +32,12 @@
                 <label><input type="checkbox" name="roles" value="Oberon"> Oberon</label>
                 <label>
                     Loyal Servant:
-                    <input type="number" id="loyal-servant-count" name="loyal-servant-count" min="0" value="2"
+                    <input type="number" id="loyal-servant-count" name="loyal-servant-count" min="0" max="5" value="1"
                         style="width: 30px;">
                 </label>
                 <label>
                     Minion:
-                    <input type="number" id="minion-count" name="minion-count" min="0" value="0" style="width: 30px;">
+                    <input type="number" id="minion-count" name="minion-count" min="0" max="3" value="0" style="width: 30px;">
                 </label>
             </div>
             <label for="custom-game-id">
@@ -134,8 +134,8 @@
                 return;
             }
 
-            if (numPlayers < 6 || numPlayers > 10) {
-                errorDiv.textContent = "Players must be 6–10.";
+            if (numPlayers < 5 || numPlayers > 10) {
+                errorDiv.textContent = "Players must be 5–10.";
                 return;
             }
             if (numAI < 0 || numAI > numPlayers - 1) {
@@ -167,8 +167,7 @@
                     num_players: numPlayers,
                     num_ai: numAI,
                     roles: rolesObj,
-                    players_human: [],
-                    players_ai: aiPlayers,
+                    players: aiPlayers,
                     assignments: {},
                 });
                 sessionStorage.setItem(nameStorageDocId(gameCode), docRef.id);

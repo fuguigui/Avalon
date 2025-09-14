@@ -63,23 +63,47 @@
 
         // Assign roles randomly
         async function assignRoles(docId, gameData) {
-            const { players_human, players_ai, roles, num_ai, num_players } = gameData;
-            let shuffledRoles = roles.slice(0, num_players);
+            const { players, roles, num_players } = gameData;
+            // Convert roles object to array of role names
+            let rolesArr = [];
+            Object.entries(roles).forEach(([role, count]) => {
+                for (let i = 0; i < count; i++) {
+                    rolesArr.push(role);
+                }
+            });
+            let shuffledRoles = rolesArr.slice();
+            console.log("Shuffling roles:", shuffledRoles);
             for (let i = shuffledRoles.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [shuffledRoles[i], shuffledRoles[j]] = [shuffledRoles[j], shuffledRoles[i]];
             }
-            let assignments = {};
-            for (let i = 0; i < num_ai; i++) {
-                assignments[players_ai[i]] = shuffledRoles[i];
+            const leader_id =  Math.floor(Math.random() * num_players);
+            let leader = null;
+            let assignments = {}; // player -> role
+            let roles_to_players = {}; // role -> list of players
+            for (let i = 0; i < num_players; i++) {
+                let player = players[i];
+                if (i === leader_id) {
+                    leader = player;
+                }
+                assignments[player] = shuffledRoles[i];
+                if (!roles_to_players[shuffledRoles[i]]) {
+                    roles_to_players[shuffledRoles[i]] = [];
+                }
+                roles_to_players[shuffledRoles[i]].push(player);
             }
-            // Assign AI roles
-            for (let i = 0; i < players_human.length; i++) {
-                assignments[players_human[i]] = shuffledRoles[num_ai + i];
-            }
+            // Choose the leader.
             await updateDoc(doc(db, 'games', docId), {
                 state: "started",
-                assignments: assignments
+                players_to_roles: assignments,
+                roles_to_players: roles_to_players,
+                current_phase: {
+                    quest: 1,
+                    team_building: {
+                        leader: leader
+                    }
+                }
+
             });
             gameInfo.innerHTML += `<br>Roles assigned! Ready to start.`;
         }
@@ -98,7 +122,6 @@
                     console.log("No document found with stored docId, will query by gameId");
                     docId = null; // reset to null to trigger query below
                 } else {
-                    console.log("Document data:", snapshot.data());
                     data = snapshot.data();
                 }
             }
@@ -117,24 +140,23 @@
             }
             if (!data) {
                 throw new Error("Game data not found.");
-            } else {
-                console.log("Game data:", data);
             }
             if (data.state !== 'waiting') {
-                const players_human = data.players_human || [];
-                if (!players_human.includes(username)) {
+                const players = data.players || [];
+                if (!players.includes(username)) {
                     gameError.textContent = "The game has started. Please join another game.";
                     throw new Error("The game has started. Please join another game.");
-                } else {
+                }
+                else {
                     location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
                 }
             }
 
             // Add user if not already present
-            const players_human = data.players_human || [];
-            if (!players_human.includes(username)) {
+            const players = data.players || [];
+            if (!players.includes(username)) {
                 await updateDoc(doc(db, 'games', docId), {
-                    players_human: [...players_human, username]
+                    players: [...players, username]
                 });
             }
 
@@ -152,13 +174,11 @@
                             ${Object.entries(data.roles).map(([role, count]) => `<li>${role}: ${count}</li>`).join('')}
                         </ul>
                 `;
-                const players_human = data.players_human || [];
-                const players_ai = data.players_ai || [];
+                const players = data.players || [];
                 userList.innerHTML = '<b>Players Joined:</b><ul>' +
-                    players_human.map(p => `<li>${p}</li>`).join('') +
-                    players_ai.map(p => `<li>${p}</li>`).join('') +
+                    players.map(p => `<li>${p}</li>`).join('') +
                     '</ul>';
-                const missing = data.num_players - players_human.length - players_ai.length;
+                const missing = data.num_players - players.length;
                 if (missing > 0) {
                     waitingInfo.textContent = `Waiting for ${missing} more player(s) to join...`;
                 } else {
@@ -171,7 +191,7 @@
                         });
                         sessionStorage.setItem(nameStorageState(gameId), 'started');
                         // Redirect game UI here
-                        window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
+                        // window.location.href = `game.html?gameId=${encodeURIComponent(gameId)}`;
                     }
                 }
             });
