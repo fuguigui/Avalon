@@ -36,39 +36,37 @@
     <!-- team selection Panel -->
     <div class="container hidden" id="team-selection-container">
         <h2>Select the quest team </h2>
-        <div class="hint" id="waiting-hint"></div>
-        <div id="game-info"></div>
-        <div class="user-list" id="user-list"></div>
-        <div class="info" id="waiting-info"></div>
+        <div class="grid">
+            <div class="game-board" , id="game-board"></div>
+            <div class="selection-panel" , id="selection-panel"></div>
+        </div>
     </div>
     <!-- team building Panel -->
-    <div class="container hidden" id="team-building-container">
+    <div class="container hidden" id="team-vote-container">
         <h2>Vote for the quest team </h2>
-        <div class="hint" id="waiting-hint"></div>
-        <div id="game-info"></div>
-        <div class="user-list" id="user-list"></div>
-        <div class="info" id="waiting-info"></div>
+        <div class="grid">
+            <div class="game-board" , id="game-board"></div>
+            <div class="selection-vote" , id="selection-vote"></div>
+        </div>
     </div>
     <!-- Quest Panel -->
     <div class="container hidden" id="quest-container">
         <h2>Quest </h2>
-        <div class="hint" id="waiting-hint"></div>
-        <div id="game-info"></div>
-        <div class="user-list" id="user-list"></div>
-        <div class="info" id="waiting-info"></div>
+        <div class="grid">
+            <div class="game-board" , id="game-board"></div>
+            <div class="selection-vote" , id="selection-vote"></div>
+        </div>
     </div>
     <!-- Game Over Panel -->
     <div class="container hidden" id="game-over-container">
         <h2>Game Over </h2>
         <div class="hint" id="waiting-hint"></div>
         <div id="game-info"></div>
-        <div class="user-list" id="user-list"></div>
-        <div class="info" id="waiting-info"></div>
     </div>
 
     <script type="module">
         import { db } from './firebase-config.js';
-        import { fetchRole, fetchKnownRoles, nameStorageDocId, nameStorageState } from './utils.js';
+        import { fetchRole, fetchKnownRoles, getTeamSize, nameStorageDocId, nameStorageState } from './utils.js';
         import {
             collection,
             query,
@@ -85,7 +83,7 @@
         const gameId = params.get('gameId');
         const username = sessionStorage.getItem('username');
         const gameError = document.getElementById('game-error');
-        const statusOrders = ["lobby", "reveal", "team_building", "quest", "assassination", "game_over", "finished"];
+        const statusOrders = ["lobby", "reveal", "team-selection", "team-vote", "quest", "assassination", "game_over", "finished"];
 
         document.getElementById('back-btn').onclick = function () {
             window.location.href = 'index.html';
@@ -144,39 +142,6 @@
             });
         }
 
-        async function revealRole(username, gameData) {
-            const role = fetchRole(username, gameData);
-            const knownRoles = fetchKnownRoles(role, gameData);
-            console.log("Player role:", role);
-            console.log("Known roles:", knownRoles);
-            document.getElementById('reveal-container').classList.remove('hidden');
-            document.getElementById('lobby-container').classList.add('hidden');
-            document.querySelector('#reveal-container h2').textContent = `Your role is ${role}`;
-            if (knownRoles.length > 0) {
-                document.getElementById('reveal-container').innerHTML += `<p>You can see these players: ${knownRoles.join(', ')}</p>`;
-            } else {
-                document.getElementById('reveal-container').innerHTML += `<p>You don't know any information about other players.</p>`;
-            }
-            let revealed_players = data.revealed_players || [];
-            if (!revealed_players.includes(username)) {
-                await updateDoc(doc(db, 'games', docId), {
-                    revealed_players: [...revealed_players, username]
-                });
-            }
-            revealed_players = data.revealed_players || [];
-            const missing = data.num_players - revealed_players.length;
-            if (missing < 1) {
-                if (data.status === 'reveal') {
-                    await updateDoc(doc(db, 'games', docId), {
-                        status: "team-selection",
-                    });
-                }
-            } else {
-                let unrevealed = data.players.filter(p => !revealed_players.includes(p));
-                document.querySelector('#reveal-container waiting-info').textContent = `Waiting for player(s) ${unrevealed.join(', ')} to reveal their roles...`;
-            }
-        }
-
         // Query the game document ONCE, then use its docId for everything
         async function initGameInLobby(username, docId, data) {
             // Add user if not already present
@@ -217,6 +182,55 @@
         document.getElementById('back-btn').onclick = function () {
             window.location.href = 'index.html';
         };
+
+        async function revealRole(username, docId, gameData) {
+            const role = fetchRole(username, gameData);
+            const knownRoles = fetchKnownRoles(role, gameData);
+            document.getElementById('reveal-container').classList.remove('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            document.querySelector('#reveal-container h2').textContent = `Your role is ${role}`;
+            if (knownRoles.length > 0) {
+                document.getElementById('reveal-container').innerHTML += `<p>You can see these players: ${knownRoles.join(', ')}</p>`;
+            } else {
+                document.getElementById('reveal-container').innerHTML += `<p>You don't know any information about other players.</p>`;
+            }
+            let revealed_players = gameData.revealed_players || [];
+            if (!revealed_players.includes(username)) {
+                await updateDoc(doc(db, 'games', docId), {
+                    revealed_players: [...revealed_players, username]
+                });
+            }
+            revealed_players = gameData.revealed_players || [];
+            const missing = gameData.num_players - revealed_players.length;
+            console.log("Revealed players:", revealed_players);
+            console.log("Missing players:", missing);
+            console.log("Game players:", gameData.players);
+            if (missing < 1) {
+                if (gameData.status === 'reveal') {
+                    await updateDoc(doc(db, 'games', docId), {
+                        status: "team-selection",
+                    });
+                }
+            } else {
+                const unrevealed = gameData.players.filter(p => !revealed_players.includes(p));
+                document.querySelector('#reveal-container #waiting-info').textContent = `Waiting for player(s) ${unrevealed.join(', ')} to reveal their roles...`;
+            }
+        }
+
+
+        async function buildTeam(username, gameData) {
+            document.getElementById('team-selection-container').classList.remove('hidden');
+            document.getElementById('reveal-container').classList.add('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            const leader = gameData.current_phase.team_building.slice(-1)[0].leader;
+            if (username !== leader) {
+                document.getElementById('team-selection-container').innerHTML += `<p>Waiting for ${leader} to select the quest team...</p>`;
+                return;
+            } else {
+                const teamSize = getTeamSize(gameData.num_players, gameData.current_phase.quest);
+                document.getElementById('team-selection-container').innerHTML += `<p>You are the leader. Please select the quest team of ${teamSize}.</p>`;
+            }
+        }
 
         async function gameBoard() {
             // Find game doc by game_id
@@ -265,7 +279,7 @@
                         });
                         break;
                     case "reveal":
-                        await revealRole(username, data).catch(err => {
+                        await revealRole(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
@@ -273,10 +287,15 @@
                         });
                         break;
                     case "team-selection":
-                        gameError.textContent = "Team selection phase not implemented yet.";
+                        await buildTeam(username, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
                         break;
-                    case "team_building":
-                        gameError.textContent = "Team building phase not implemented yet.";
+                    case "team-vote":
+                        gameError.textContent = "Team voting phase not implemented yet.";
                         break;
                     case "quest":
                         gameError.textContent = "Quest phase not implemented yet.";
@@ -290,36 +309,6 @@
                         throw new Error("Game state not recognized.");
                 }
             });
-            // let phase = data.current_phase;
-            // const role = await fetchRole(username, data);
-            // document.body.innerHTML += `<h2>Your Role: ${role}!</h2>`;
-            // document.body.innerHTML += `<h1>Quest ${phase.quest}</h1>`;
-
-            // const teamBuildingPhases = current_phase.team_building;
-            // const latestTeamBuilding = teamBuildingPhases[teamBuildingPhases.length - 1];
-            // const votesStatus = latestTeamBuilding.votes_status;
-            // if (votesStatus === "Passed") {
-            //     // Show quest phase
-            //     const quest = current_phase.quest;
-            //     document.body.innerHTML += `
-            //         <div>
-            //             <p>Cards: ${quest.cards.map(card => Object.entries(card)[0].join(': ')).join(', ')}</p>
-            //             <p>Cards Revealed: ${quest.cards_revealed.join(', ')}</p>
-            //             <p>Quest Result: ${quest.quest_result}</p>
-            //         </div>
-            //     `;
-            // } else {
-            //     // Show team building phase
-            //     document.body.innerHTML += `
-            //         <div>
-            //             <h3>Team Building</h3>
-            //             <p>Leader: ${latestTeamBuilding.leader}</p>
-            //         </div>
-            //     `;
-            //     if (votesStatus === "Failed") {
-            //         document.body.innerHTML += `<p>Team vote failed. New team building phase will start.</p>`;
-            //     }
-            // }
         }
 
         gameBoard().catch(err => {

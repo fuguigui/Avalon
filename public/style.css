@@ -71,6 +71,31 @@ button.discard:hover {
     margin-top: 1em;
 }
 
+.game-board {
+    background: #2e1a1a;
+    padding: 1em;
+    border-radius: 8px;
+}
+
+.selection-panel {
+    background: #2e1a1a;
+    padding: 1em;
+    border-radius: 8px;
+}
+
+.selection-vote {
+    background: #2e1a1a;
+    padding: 1em;
+    border-radius: 8px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1em;
+    padding: 1em;
+    height: 100%;
+}
 
 .hint {
     color: #435df5;
