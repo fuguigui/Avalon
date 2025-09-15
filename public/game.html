@@ -45,16 +45,16 @@
     <div class="container hidden" id="team-vote-container">
         <h2>Vote for the quest team </h2>
         <div class="grid">
-            <div class="game-board" , id="game-board"></div>
             <div class="selection-vote" , id="selection-vote"></div>
+            <div class="game-board" , id="game-board"></div>
         </div>
     </div>
     <!-- Quest Panel -->
     <div class="container hidden" id="quest-container">
         <h2>Quest </h2>
         <div class="grid">
-            <div class="game-board" , id="game-board"></div>
             <div class="selection-vote" , id="selection-vote"></div>
+            <div class="game-board" , id="game-board"></div>
         </div>
     </div>
     <!-- Assassin Panel -->
@@ -104,6 +104,8 @@
             }, 3000); // Show message for 2 seconds, then redirect
         }
         document.title = `Game Room - ${gameId}`;
+        document.getElementById('main-menu').getElementsByTagName('h1')[0].textContent = `Game Room - ${gameId}`;
+        document.getElementById('main-menu').innerHTML += `<div class="info">Hey, <b>${username}</b>!</div>`;
 
         // Assign roles randomly
         async function assignRoles(docId, gameData) {
@@ -155,6 +157,9 @@
             // Add user if not already present
             let players = data.players || [];
             if (!players.includes(username)) {
+                if (players.length >= data.num_players) {
+                    throw new Error("Game is full. Please join another game.");
+                }
                 await updateDoc(doc(db, 'games', docId), {
                     players: [...players, username]
                 });
@@ -204,25 +209,26 @@
             }
 
             let revealed_players = gameData.revealed_players || [];
-            let updateObj = {
-                revealed_players: revealed_players
-            };
+            let missing = gameData.num_players - revealed_players.length;
             console.log("Revealed players before update:", revealed_players);
             if (!revealed_players.includes(username)) {
-                updateObj.revealed_players = [...revealed_players, username];
+                missing--;
+                revealed_players.push(username);
+                await updateDoc(doc(db, 'games', docId), {
+                    revealed_players: revealed_players
+                });
             }
-            const missing = gameData.num_players - updateObj.revealed_players.length;
+            console.log("Revealed players after update:", gameData.revealed_players || []);
             console.log("Missing players:", missing);
             console.log("Game players:", gameData.players);
             if (missing < 1) {
-                updateObj.status = "team-selection";
+                await updateDoc(doc(db, 'games', docId), {
+                    status: "team-selection"
+                });
             } else {
-                const unrevealed = gameData.players.filter(p => !updateObj.revealed_players.includes(p));
+                const unrevealed = gameData.players.filter(p => !revealed_players.includes(p));
                 document.querySelector('#reveal-container #waiting-info').textContent = `Waiting for player(s) ${unrevealed.join(', ')} to reveal their roles...`;
             }
-            await updateDoc(doc(db, 'games', docId), {
-                updateObj
-            });
         }
 
         async function showTeamSelection(players, teamSize, docId, gameData) {
@@ -293,7 +299,7 @@
             document.getElementById('lobby-container').classList.add('hidden');
             const leader = gameData.current_phase.team_building.slice(-1)[0].leader;
             if (username !== leader) {
-                document.getElementById('team-selection-container').innerHTML += `<p>Waiting for ${leader} to select the quest team...</p>`;
+                document.querySelector('#team-selection-container #selection-panel').textContent = `You are not the leader. Waiting for ${leader} to select the quest team...`;
                 return;
             } else {
                 const teamSize = getTeamSize(gameData.num_players, gameData.current_phase.quest);
@@ -751,7 +757,6 @@
                 sessionStorage.setItem(nameStorageDocId(gameId), docId);
             }
             console.log("Using docId:", docId);
-            let prev_status = null;
             onSnapshot(doc(db, 'games', docId), async (docSnap) => {
                 if (!docSnap.exists()) {
                     gameError.textContent = "Game not found.";
@@ -766,81 +771,81 @@
                 }
                 switch (status) {
                     case "lobby":
-                        if (prev_status === "lobby") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "lobby") {
+                            console.log(`${username} Already In lobby phase...`);
                             break;
                         }
-                        prev_status = status;
                         await initGameInLobby(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
+                        sessionStorage.setItem(username, "lobby");
                         break;
                     case "reveal":
-                        if (prev_status === "reveal") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "reveal") {
+                            console.log(`${username} Already In reveal phase...`);
                             break;
                         }
-                        prev_status = status;
+                        sessionStorage.setItem(username, "reveal");
                         await revealRole(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
                         break;
                     case "team-selection":
-                        if (prev_status === "team-selection") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "team-selection") {
+                            console.log(`${username} Already In team-selection phase...`);
                             break;
                         }
-                        prev_status = status;
+                        sessionStorage.setItem(username, "team-selection");
                         await buildTeam(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
                         break;
                     case "team-vote":
-                        if (prev_status === "team-vote") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "team-vote") {
+                            console.log(`${username} Already In team-vote phase...`);
                             break;
                         }
-                        prev_status = status;
+                        sessionStorage.setItem(username, "team-vote");
                         await voteTeam(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
                         break;
                     case "quest":
-                        if (prev_status === "quest") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "quest") {
+                            console.log(`${username} Already In quest phase...`);
                             break;
                         }
-                        prev_status = status;
+                        sessionStorage.setItem(username, "quest");
                         await quest(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
                         break;
                     case "assassination":
-                        if (prev_status === "assassination") {
-                            // No status change, do nothing
+                        if (sessionStorage.getItem(username) === "assassination") {
+                            console.log(`${username} Already In assassination phase...`);
                             break;
                         }
-                        prev_status = status;
+                        sessionStorage.setItem(username, "assassination");
                         await assassin(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
                                 window.location.href = 'index.html#join';
-                            }, 2000);
+                            }, 10000);
                         });
                         break;
                     default:
