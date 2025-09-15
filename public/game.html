@@ -57,6 +57,14 @@
             <div class="selection-vote" , id="selection-vote"></div>
         </div>
     </div>
+    <!-- Assassin Panel -->
+    <div class="container hidden" id="assasin-container">
+        <h2>Assassin </h2>
+        <div class="grid">
+            <div class="assasin-panel" , id="assasin-panel"></div>
+            <div class="game-board" , id="game-board"></div>
+        </div>
+    </div>
     <!-- Game Over Panel -->
     <div class="container hidden" id="game-over-container">
         <h2>Game Over </h2>
@@ -194,27 +202,27 @@
             } else {
                 document.getElementById('reveal-container').innerHTML += `<p>You don't know any information about other players.</p>`;
             }
+
             let revealed_players = gameData.revealed_players || [];
+            let updateObj = {
+                revealed_players: revealed_players
+            };
+            console.log("Revealed players before update:", revealed_players);
             if (!revealed_players.includes(username)) {
-                await updateDoc(doc(db, 'games', docId), {
-                    revealed_players: [...revealed_players, username]
-                });
+                updateObj.revealed_players = [...revealed_players, username];
             }
-            revealed_players = gameData.revealed_players || [];
-            const missing = gameData.num_players - revealed_players.length;
-            console.log("Revealed players:", revealed_players);
+            const missing = gameData.num_players - updateObj.revealed_players.length;
             console.log("Missing players:", missing);
             console.log("Game players:", gameData.players);
             if (missing < 1) {
-                if (gameData.status === 'reveal') {
-                    await updateDoc(doc(db, 'games', docId), {
-                        status: "team-selection",
-                    });
-                }
+                updateObj.status = "team-selection";
             } else {
-                const unrevealed = gameData.players.filter(p => !revealed_players.includes(p));
+                const unrevealed = gameData.players.filter(p => !updateObj.revealed_players.includes(p));
                 document.querySelector('#reveal-container #waiting-info').textContent = `Waiting for player(s) ${unrevealed.join(', ')} to reveal their roles...`;
             }
+            await updateDoc(doc(db, 'games', docId), {
+                updateObj
+            });
         }
 
         async function showTeamSelection(players, teamSize, docId, gameData) {
@@ -316,6 +324,12 @@
             let status = "quest";
             if (approveCount >= majority) {
                 // Passed: update votes_status and proceed to quest
+                const teamMembers = lastTeamBuilding.proposal || [];
+                let questCards = {};
+                teamMembers.forEach(member => {
+                    questCards[member] = "Pending"; // To be filled during quest phase
+                });
+                currentPhase.quest = { "cards": questCards };
                 lastTeamBuilding.votes_status = "Passed";
                 teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
                 currentPhase.team_building = teamBuildingPhases;
@@ -420,6 +434,299 @@
             };
         }
 
+        async function judgeQuestCompletion(docId, gameData) {
+            let updateObj = {};
+            // Step 1: Check for game end or next phase
+            // Count successes and fails
+            const pastPhases = Array.isArray(gameData.past_phases) ? [...gameData.past_phases] : [];
+            const players = gameData.players || [];
+            const currentPhase = { ...gameData.current_phase };
+            const successCount = pastPhases.filter(phase => phase.quest && phase.quest.quest_result === "Success").length;
+            const failCountTotal = pastPhases.filter(phase => phase.quest && phase.quest.quest_result === "Fail").length;
+
+
+            if (successCount >= 3) {
+                // Check if Assassin is in the game
+                const hasAssassin = Object.keys(gameData.roles || {}).includes("Assassin");
+                if (hasAssassin) {
+                    // Assassin phase: let Assassin pick Merlin
+                    updateObj.status = "assassination";
+                } else {
+                    // Good wins immediately
+                    updateObj.status = "game-over";
+                    updateObj.winner = "Good";
+                }
+            } else if (failCountTotal >= 3) {
+                // Evil wins
+                updateObj.state = "game-over";
+                updateObj.winner = "Evil";
+            } else {
+                // Next quest phase
+                // Find next leader
+                const currentLeader = currentPhase.team_building.slice(-1)[0].leader;
+                const nextLeader = players[(players.indexOf(currentLeader) + 1) % players.length];
+
+                updateObj.current_phase = {
+                    quest_number: currentPhase.quest_number + 1,
+                    team_building: [{
+                        leader: nextLeader,
+                        proposal: [],
+                        votes: {},
+                        votes_status: "Collecting"
+                    }],
+                    quest: {
+                        cards: [],
+                        cards_revealed: [],
+                    }
+                };
+            }
+
+            // Update Firestore
+            await updateDoc(doc(db, 'games', docId), {
+                updateObj
+            });
+
+        }
+
+        async function revealQuest(docId, gameData) {
+            const currentPhase = { ...gameData.current_phase };
+            const pastPhases = Array.isArray(gameData.past_phases) ? [...gameData.past_phases] : [];
+            const players = gameData.players || [];
+            const quest = currentPhase.quest;
+            const questCards = quest.cards || {};
+            const questNumber = currentPhase.quest_number || 1;
+
+            // Step 1: Reveal quest cards
+            const cardsRevealed = questCards.map(card => Object.values(card)[0]);
+            quest.cards_revealed = cardsRevealed;
+
+            // Step 2: Determine quest result
+            // Good roles can only vote "Success"
+            // Evil roles can vote "Fail" or "Success"
+            // For classic Avalon, only one "Fail" is needed for most quests
+            // TODO: add one more rule for the 4th quest with 7+ players
+            const failCount = cardsRevealed.filter(card => card === "Fail").length;
+            let questResult = "Success";
+            if (questNumber === 4 && gameData.num_players >= 7) {
+                // In the 4th quest with 7+ players, need 2 fails to fail the quest
+                if (failCount >= 2) {
+                    questResult = "Fail";
+                }
+            } else
+                if (failCount > 0) {
+                    questResult = "Fail";
+                }
+            quest.quest_result = questResult;
+
+            // UI: Show revealed cards and result
+            document.getElementById('reveal-container').innerHTML = `
+                <h2>Quest Results</h2>
+                <div>Cards Revealed: ${cardsRevealed.join(', ')}</div>
+                <div>Quest Result: <b>${questResult}</b></div>
+            `;
+
+            // Move current_phase to past_phases
+            currentPhase.quest = quest;
+            pastPhases.push(currentPhase);
+            await updateDoc(doc(db, 'games', docId), {
+                past_phases: pastPhases,
+                current_phase: currentPhase,
+            });
+            await judgeQuestCompletion(docId, gameData);
+        }
+
+        async function quest(username, docId, gameData) {
+            const currentPhase = gameData.current_phase;
+            const questCards = currentPhase.quest.cards || {};
+
+
+            // UI container
+            const container = document.getElementById('quest-container')
+            container.classList.remove('hidden');
+            document.getElementById('reveal-container').classList.add('hidden');
+            document.getElementById('team-vote-container').classList.add('hidden');
+            document.getElementById('team-selection-container').classList.add('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+
+            // If user is a quest player, show quest-vote-form
+            if (questPlayers.includes(username) && questCards[username] === "Pending") {
+                container.innerHTML = `
+                    <h2>Quest Vote</h2>
+                    <form id="quest-vote-form">
+                        <label><input type="radio" name="quest-vote" value="Success"> Success</label><br>
+                        <label><input type="radio" name="quest-vote" value="Fail"> Fail</label><br>
+                    </form>
+                    <div class="error" id="quest-vote-error"></div>
+                    <div class="info" id="quest-vote-info"></div>
+                    <button id="submit-quest-btn" disabled>Submit Quest Vote</button>
+                `;
+
+                const form = container.querySelector('#quest-vote-form');
+                const errorDiv = container.querySelector('#quest-vote-error');
+                const infoDiv = container.querySelector('#quest-vote-info');
+                const submitBtn = container.querySelector('#submit-quest-btn');
+
+                form.addEventListener('change', () => {
+                    const selected = form.querySelector('input[name="quest-vote"]:checked');
+                    submitBtn.disabled = !selected;
+                    errorDiv.textContent = selected ? '' : 'Please select Success or Fail.';
+                });
+
+                submitBtn.onclick = async (e) => {
+                    e.preventDefault();
+                    const selected = form.querySelector('input[name="quest-vote"]:checked');
+                    if (!selected) {
+                        errorDiv.textContent = 'Please select Success or Fail.';
+                        return;
+                    }
+                    const currentPhase = { ...gameData.current_phase };
+                    const questPhase = currentPhase.quest;
+                    let questCards = questPhase.cards || {};
+                    // Update quest cards in Firestore
+                    questCards[username] = selected.value;
+                    questPhase.cards = questCards;
+                    currentPhase.quest = questPhase;
+                    await updateDoc(doc(db, 'games', docId), {
+                        current_phase: currentPhase
+                    });
+                    infoDiv.textContent = `Your quest vote "${selected.value}" has been submitted.`;
+                    submitBtn.disabled = true;
+                    Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+                };
+            } else {
+                container.innerHTML = `
+                    <h2>Waiting for Quest</h2>`;
+                const pendingPlayers = Object.entries(gameData.current_phase.quest.cards).filter(([player, vote]) => vote === "Pending").map(([player, vote]) => player);
+                if (pendingPlayers.length < 1) {
+                    // All quest players have voted, the next step will be handled by the onSnapshot listener
+                    infoDiv.textContent = `All quest members have voted.`;
+                    Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+                    await revealQuest(docId, gameData);
+                } else {
+                    infoDiv.textContent = `Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
+                }
+            }
+        }
+
+        async function assassin(username, docId, gameData) {
+            const container = document.getElementById('assasin-container');
+            container.classList.remove('hidden');
+            document.getElementById('team-vote-container').classList.add('hidden');
+            document.getElementById('team-selection-container').classList.add('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            document.getElementById('quest-container').classList.add('hidden');
+            document.getElementById('game-over-container').classList.add('hidden');
+
+
+            // Find who is the assassin
+            const assignments = gameData.players_to_roles || {};
+            let assassinPlayer = null;
+            for (const [player, role] of Object.entries(assignments)) {
+                if (role === "Assassin") {
+                    assassinPlayer = player;
+                    break;
+                }
+            }
+
+            // If current user is not the assassin, show waiting message
+            if (username !== assassinPlayer) {
+                container.innerHTML = `
+                    <h2>Assassination Phase</h2>
+                    <p>Waiting for the Assassin (${assassinPlayer}) to choose Merlin...</p>
+                `;
+                return;
+            }
+
+            // Assassin UI: choose one player as Merlin
+            const players = Object.keys(assignments);
+            container.innerHTML = `
+                <h2>Assassination Phase</h2>
+                <p>You are the Assassin. Choose who you think is Merlin:</p>
+                <form id="assassin-form">
+                    ${players.map(p => `<label style="display:block;"><input type="radio" name="merlin-choice" value="${p}"> ${p}</label>`).join('')}
+                </form>
+                <div class="error" id="assassin-error"></div>
+                <button id="submit-assassin-btn" disabled>Submit Choice</button>
+            `;
+
+            const form = container.querySelector('#assassin-form');
+            const errorDiv = container.querySelector('#assassin-error');
+            const submitBtn = container.querySelector('#submit-assassin-btn');
+
+            form.addEventListener('change', () => {
+                const selected = form.querySelector('input[name="merlin-choice"]:checked');
+                submitBtn.disabled = !selected;
+                errorDiv.textContent = selected ? '' : 'Please select a player.';
+            });
+            let selected = null;
+            let winner = "Good";
+            submitBtn.onclick = async (e) => {
+                e.preventDefault();
+                if (!selected) {
+                    errorDiv.textContent = 'Please select a player.';
+                    return;
+                }
+                selected = form.querySelector('input[name="merlin-choice"]:checked');
+                errorDiv.textContent = `You have chosen ${selected.value} as Merlin.`;
+                submitBtn.disabled = true;
+                winner = (assignments[selected.value] === "Merlin") ? "Evil" : "Good";
+                Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+            };
+            // Update Firestore with assassin's choice
+            await updateDoc(doc(db, 'games', docId), {
+                'assassin': selected.value,
+                'winner': winner,
+                'status': 'game_over'
+            });
+        }
+
+        function revealGameResult(gameData) {
+            const container = document.getElementById('game-over-container');
+            container.classList.remove('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            document.getElementById('reveal-container').classList.add('hidden');
+            document.getElementById('team-selection-container').classList.add('hidden');
+            document.getElementById('team-vote-container').classList.add('hidden');
+            document.getElementById('quest-container').classList.add('hidden');
+            document.getElementById('assasin-container').classList.add('hidden');
+
+            let winner = gameData.winner;
+            let resultMsg = `<h2>Game Over</h2><div><b>${winner} side wins!</b></div>
+            <div><b>All roles:</b></div><ul>`;
+            for (const [player, role] of Object.entries(gameData.players_to_roles)) {
+                resultMsg += `<li>${player}: ${role}</li>`;
+            }
+            resultMsg += `</ul>`;
+
+            if (gameData.assassin) {
+                resultMsg += `<div>Assassin's choice: <b>${gameData.assassin}</b></div>`;
+                if (gameData.roles_to_players && gameData.roles_to_players["Merlin"]) {
+                    const merlinPlayers = gameData.roles_to_players["Merlin"]
+                    if (merlinPlayers.includes(gameData.assassin)) {
+                        resultMsg += `<div>The Assassin correctly identified Merlin!</div>`;
+                    } else {
+                        resultMsg += `<div>The Assassin failed to identify Merlin.</div>`;
+                    }
+                }
+            }
+
+            resultMsg += `<div class="hint">Will leave this page in 5 seconds.</div>
+                            <button id="stay-btn">Stay</button>
+                            <button id="back-home-btn">Back to Home</button>`;
+            container.innerHTML = resultMsg;
+            let leaveTimeout = setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 5000);
+
+            document.getElementById('stay-btn').onclick = () => {
+                clearTimeout(leaveTimeout);
+                container.querySelector('.hint').textContent = "You chose to stay on this page.";
+            };
+            document.getElementById('back-home-btn').onclick = () => {
+                window.location.href = 'index.html';
+            };
+        }
+
         async function gameBoard() {
             // Find game doc by game_id
             const gamesRef = collection(db, 'games');
@@ -444,6 +751,7 @@
                 sessionStorage.setItem(nameStorageDocId(gameId), docId);
             }
             console.log("Using docId:", docId);
+            let prev_status = null;
             onSnapshot(doc(db, 'games', docId), async (docSnap) => {
                 if (!docSnap.exists()) {
                     gameError.textContent = "Game not found.";
@@ -452,13 +760,17 @@
                 const data = docSnap.data();
                 let status = data.status
                 console.log("Game status:", status);
-                console.log("Game state:", data);
-                if (status === "finished") {
-                    throw new Error("Game has finished. Please join another game.");
+                if (status === "game_over") {
+                    revealGameResult(data);
                     return;
                 }
                 switch (status) {
                     case "lobby":
+                        if (prev_status === "lobby") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
                         await initGameInLobby(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
@@ -467,6 +779,11 @@
                         });
                         break;
                     case "reveal":
+                        if (prev_status === "reveal") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
                         await revealRole(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
@@ -475,6 +792,11 @@
                         });
                         break;
                     case "team-selection":
+                        if (prev_status === "team-selection") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
                         await buildTeam(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
@@ -483,6 +805,11 @@
                         });
                         break;
                     case "team-vote":
+                        if (prev_status === "team-vote") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
                         await voteTeam(username, docId, data).catch(err => {
                             gameError.textContent = err.message;
                             setTimeout(() => {
@@ -491,15 +818,33 @@
                         });
                         break;
                     case "quest":
-                        gameError.textContent = "Quest phase not implemented yet.";
+                        if (prev_status === "quest") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
+                        await quest(username, docId, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
                         break;
                     case "assassination":
-                        gameError.textContent = "Assassination phase not implemented yet.";
+                        if (prev_status === "assassination") {
+                            // No status change, do nothing
+                            break;
+                        }
+                        prev_status = status;
+                        await assassin(username, docId, data).catch(err => {
+                            gameError.textContent = err.message;
+                            setTimeout(() => {
+                                window.location.href = 'index.html#join';
+                            }, 2000);
+                        });
                         break;
-                    case "game_over":
-                        gameError.textContent = "Game over phase not implemented yet.";
                     default:
-                        throw new Error("Game state not recognized.");
+                        throw new Error(`Game status ${status} not recognized.`);
                 }
             });
         }

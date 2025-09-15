@@ -8,7 +8,7 @@ Each game document contains
   "numAI": 2,
   "roles": ["Merlin", "Assassin", ...],
   "createdAt": <timestamp>,
-  "state": "waiting", // or "started", "finished"
+  "status": "waiting", // or "started", "finished"
   "assignments": { "user1": "Merlin", "user2": "Assassin", },
   "role_to_players": { "Merlin": "user1", "Assasin": "user3": },
   "quest": null,
@@ -24,10 +24,10 @@ Each game document contains
     "quest": {
       "cards": [{"player_a": "Success"}, {"player_b": "Fail"}],
       "cards_revealed": ["Success", "Success", "Fail"],
-      "quest_result": "Collecting/Revealing/Success/Fail"
+      "quest_result": "Success/Fail"
     },
-    "Assasin": "null/player_t"
   },
+  "assasin": null,
   "past_phases": [...],
   "winner": "Good/Evil"
 }
@@ -50,7 +50,14 @@ firebase serve -p 5001 # if 5000 is taken
 firebase deploy
 ```
 
+TODO:
+check the quest ideas
+
+
 Function ideas:
 
 - In the start.html page: distinguish good and evil by icons
 - Check the game setup: by the number of good and evil player number
+
+Quest:
+- add the function: for good people, can only vote Success.
