@@ -76,7 +76,7 @@
 
         // Update max AI when total players changes
         numPlayersInput.addEventListener('input', () => {
-            const maxAI = Math.max(0, parseInt(numPlayersInput.value, 10) - 1);
+            const maxAI = Math.max(0, parseInt(numPlayersInput.value, 10));
             numAIInput.max = maxAI;
             if (parseInt(numAIInput.value, 10) > maxAI) {
                 numAIInput.value = maxAI;
@@ -138,8 +138,8 @@
                 errorDiv.textContent = "Players must be 5–10.";
                 return;
             }
-            if (numAI < 0 || numAI > numPlayers - 1) {
-                errorDiv.textContent = "AI players must be between 0 and total players.";
+            if (numAI < 0 || numAI > numPlayers) {
+                errorDiv.textContent = `AI players ${numAI} must be between 0 and total players ${numPlayers}.`;
                 return;
             }
             const aiPlayers = Array.from({ length: numAI }, (_, i) => `AI ${i + 1}`);
