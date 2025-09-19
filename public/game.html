@@ -320,6 +320,7 @@
             document.getElementById('lobby-container').classList.add('hidden');
             document.getElementById('team-vote-reveal-container').classList.add('hidden');
             document.getElementById('quest-container').classList.add('hidden');
+            document.getElementById('quest-reveal-container').classList.add('hidden');
             const leader = gameData.current_phase.team_building.slice(-1)[0].leader;
             if (username !== leader) {
                 document.querySelector('#team-selection-container #selection-panel').textContent = `${leader} is the leader. Waiting for the team proposal...`;
@@ -366,26 +367,20 @@
                         "quest_number": gameData.current_phase.quest_number,
                         "team_building": teamBuildingPhases,
                         "quest": { "cards": questCards }
-                    }, status: "reveal-team-vote",
-                    votes_status: lastTeamBuilding.votes_status
+                    },
+                    status: "reveal-team-vote",
                 });
             } else {
                 // Failed: update votes_status, add new team_building phase
                 lastTeamBuilding.votes_status = "Failed";
                 teamBuildingPhases[teamBuildingPhases.length - 1] = lastTeamBuilding;
-                // Find next leader
-                const nextLeader = players[(players.indexOf(lastTeamBuilding.leader) + 1) % players.length];
-                // Add new team_building phase
-                teamBuildingPhases.push({
-                    leader: nextLeader,
-                });
                 // Update Firestore
                 await updateDoc(doc(db, 'games', docId), {
                     current_phase: {
                         "quest_number": gameData.current_phase.quest_number,
                         "team_building": teamBuildingPhases
-                    }, status: "reveal-team-vote",
-                    votes_status: lastTeamBuilding.votes_status
+                    },
+                    status: "reveal-team-vote",
                 });
             }
         }
@@ -487,30 +482,41 @@
             document.getElementById('team-vote-container').classList.add('hidden');
 
             const gameBoardPanel = document.querySelector('#team-vote-reveal-container #reveal-panel');
-            const votes_status = gameData.votes_status;
-            let voted = {};
-            let nextAction = "";
-            let teamMembers = gameData.current_phase.team_building.slice(-1)[0].proposal || [];
-            if (votes_status === "Passed") {
-                voted = gameData.current_phase.team_building.slice(-1)[0].votes;
-                nextAction = "Proceeding to the quest...";
-            } else {
-                voted = gameData.current_phase.team_building.slice(-2)[0].votes;
-                const leader = gameData.current_phase.team_building.slice(-1)[0].leader;
-                teamMembers = gameData.current_phase.team_building.slice(-2)[0].proposal || [];
-                nextAction = `The next leader is ${leader} will propose a new team.`;
-            }
-            gameBoardPanel.innerHTML = `
+            const currentPhase = { ...gameData.current_phase };
+            const teamBuildingPhases = currentPhase.team_building.slice();
+            const lastTeamBuilding = { ...teamBuildingPhases[teamBuildingPhases.length - 1] };
+            const voted = lastTeamBuilding.votes || {};
+            const votes_status = lastTeamBuilding.votes_status;
+            const teamMembers = lastTeamBuilding.proposal || [];
+            const internalHtml = `
                 <h2>Vote Result: <b>${votes_status} </b></h2><br>
                 for ${teamMembers.join(', ')}<br>
                 <ul>
                     ${Object.entries(voted).map(([player, vote]) => `<li>${player}: ${vote}</li>`).join('')}
                 </ul>
-            ` + nextAction;
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            await updateDoc(doc(db, 'games', docId), {
-                status: votes_status === "Passed" ? "quest" : "team-selection"
-            });
+            `;
+            if (votes_status === "Passed") {
+                gameBoardPanel.innerHTML = internalHtml + "Proceeding to the quest...";
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                await updateDoc(doc(db, 'games', docId), {
+                    status: "quest"
+                });
+            } else {
+                const players = gameData.players || [];
+                // Find next leader
+                const nextLeader = players[(players.indexOf(lastTeamBuilding.leader) + 1) % players.length];
+                // Add new team_building phase
+                teamBuildingPhases.push({
+                    leader: nextLeader,
+                });
+                currentPhase.team_building = teamBuildingPhases;
+                gameBoardPanel.innerHTML = internalHtml + `The next leader ${nextLeader} will propose a new team.`;
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                await updateDoc(doc(db, 'games', docId), {
+                    status: "team-selection",
+                    current_phase: currentPhase
+                });
+            }
         }
 
         async function revealQuest(docId, gameData) {
@@ -571,12 +577,14 @@
                     // Assassin phase: let Assassin pick Merlin
                     await updateDoc(doc(db, 'games', docId), {
                         past_phases: pastPhases,
+                        current_phase: null,
                         status: "assassination"
                     });
                 } else {
                     // Good wins immediately
                     await updateDoc(doc(db, 'games', docId), {
                         past_phases: pastPhases,
+                        current_phase: null,
                         status: "game-over",
                         winner: "Good"
                     });
@@ -586,6 +594,7 @@
                 await updateDoc(doc(db, 'games', docId), {
                     past_phases: pastPhases,
                     status: "game-over",
+                    current_phase: null,
                     winner: "Evil"
                 });
             } else {
@@ -637,7 +646,7 @@
                         <div class="error" id="quest-vote-error"></div>
                         <button id="submit-quest-btn" disabled>Submit Quest Vote</button>
                     `;
-                    pendingPlayers = pendingPlayers.filter(p => p !== username);
+                    let newPendingPlayers = pendingPlayers.filter(p => p !== username);
 
                     const form = votePanel.querySelector('#quest-vote-form');
                     const errorDiv = votePanel.querySelector('#quest-vote-error');
@@ -660,20 +669,31 @@
                         // Update quest cards in Firestore
                         questCards[username] = selected.value;
                         currentPhase.quest.cards = questCards;
-                        await updateDoc(doc(db, 'games', docId), {
-                            current_phase: currentPhase
-                        });
-                        votePanel.textContent = `Your quest vote "${selected.value}" has been submitted. Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
-                        submitBtn.disabled = true;
-                        Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+                        votePanel.textContent = `Your quest vote "${selected.value}" has been submitted. Waiting for ${newPendingPlayers.join(', ')} to submit their quests...`;
+                        if (newPendingPlayers.length < 1) {
+                            // All quest players have voted, the next step will be handled by the onSnapshot listener
+                            votePanel.textContent = `You have submitted your quest vote "${selected.value}". All quest members have voted. Waiting for results...`;
+                            await updateDoc(doc(db, 'games', docId), {
+                                status: "reveal-quest",
+                                current_phase: currentPhase
+                            });
+                        } else {
+                            submitBtn.disabled = true;
+                            Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+                            votePanel.textContent = `You have submitted your quest vote "${selected.value}". Waiting for ${newPendingPlayers.join(', ')} to submit their quests...`;
+                            await updateDoc(doc(db, 'games', docId), {
+                                current_phase: currentPhase
+                            });
+                        }
+
                     };
                 } else {
-                    votePanel.textContent = `You have already submitted your quest vote "${questCards[username]}". Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
+                    votePanel.textContent = `You have submitted your quest vote "${questCards[username]}". Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
                 }
             } else {
                 if (pendingPlayers.length < 1) {
                     // All quest players have voted, the next step will be handled by the onSnapshot listener
-                    votePanel.textContent = `All quest members have voted.`;
+                    votePanel.textContent = `You are not on the quest team. All quest members have voted. Waiting for results...`;
                     await updateDoc(doc(db, 'games', docId), {
                         status: "reveal-quest"
                     });
@@ -733,26 +753,27 @@
                 submitBtn.disabled = !selected;
                 errorDiv.textContent = selected ? '' : 'Please select a player.';
             });
-            let selected = null;
-            let winner = "Good";
             submitBtn.onclick = async (e) => {
                 e.preventDefault();
+                const selected = form.querySelector('input[name="merlin-choice"]:checked');
+                const selectedRole = selected.value;
                 if (!selected) {
                     errorDiv.textContent = 'Please select a player.';
                     return;
                 }
-                selected = form.querySelector('input[name="merlin-choice"]:checked');
-                errorDiv.textContent = `You have chosen ${selected.value} as Merlin.`;
+                errorDiv.textContent = `You have chosen ${selectedRole} as Merlin.`;
                 submitBtn.disabled = true;
-                winner = (assignments[selected.value] === "Merlin") ? "Evil" : "Good";
+                const winner = (assignments[selectedRole] === "Merlin") ? "Evil" : "Good";
                 Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+
+                // Update Firestore with assassin's choice
+                await updateDoc(doc(db, 'games', docId), {
+                    assassin: selectedRole,
+                    winner: winner,
+                    status: 'game-over',
+                    current_phase: null,
+                });
             };
-            // Update Firestore with assassin's choice
-            await updateDoc(doc(db, 'games', docId), {
-                'assassin': selected.value,
-                'winner': winner,
-                'status': 'game_over'
-            });
         }
 
         function revealGameResult(gameData) {

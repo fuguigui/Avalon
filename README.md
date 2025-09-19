@@ -50,14 +50,27 @@ firebase serve -p 5001 # if 5000 is taken
 firebase deploy
 ```
 
-TODO:
-check the quest ideas
+## Worklog
 
+2025-09-18: some pages will jump out. Check the reason and fix them
 
-Function ideas:
+## Function ideas
 
 - In the start.html page: distinguish good and evil by icons
 - Check the game setup: by the number of good and evil player number
+- Build the GameBoard: shows the whole progress of the game
+- Add avatar to roles
+- Add the vote limit: good people can only quest success.
 
 Quest:
 - add the function: for good people, can only vote Success.
+
+## Known bugs
+
+- When questing, it can happen some member is still pending but there is one fail, the quest becomes completed.
+- Deleting the current phase when game is over.
+- once another member votes, the current member's unsubmitted vote disappears. Consider adding sessionStorage to store.
+- for some unknown reason, players may be kicked out.
+
+
+
