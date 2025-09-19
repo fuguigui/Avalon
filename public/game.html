@@ -161,7 +161,7 @@
                 players_to_roles: assignments,
                 roles_to_players: roles_to_players,
                 current_phase: {
-                    quest: 1,
+                    quest_number: 1,
                     team_building: [{
                         leader: leader
                     }]
@@ -318,12 +318,14 @@
             document.getElementById('team-selection-container').classList.remove('hidden');
             document.getElementById('reveal-container').classList.add('hidden');
             document.getElementById('lobby-container').classList.add('hidden');
+            document.getElementById('team-vote-reveal-container').classList.add('hidden');
+            document.getElementById('quest-container').classList.add('hidden');
             const leader = gameData.current_phase.team_building.slice(-1)[0].leader;
             if (username !== leader) {
                 document.querySelector('#team-selection-container #selection-panel').textContent = `${leader} is the leader. Waiting for the team proposal...`;
                 return;
             } else {
-                const teamSize = getTeamSize(gameData.num_players, gameData.current_phase.quest);
+                const teamSize = getTeamSize(gameData.num_players, gameData.current_phase.quest_number);
                 await showTeamSelection(gameData.players, teamSize, docId, gameData).catch(err => {
                     gameError.textContent = err.message;
                 });
@@ -361,7 +363,7 @@
                 // Update Firestore
                 await updateDoc(doc(db, 'games', docId), {
                     current_phase: {
-                        "quest": gameData.current_phase.quest,
+                        "quest_number": gameData.current_phase.quest_number,
                         "team_building": teamBuildingPhases,
                         "quest": { "cards": questCards }
                     }, status: "reveal-team-vote",
@@ -380,7 +382,7 @@
                 // Update Firestore
                 await updateDoc(doc(db, 'games', docId), {
                     current_phase: {
-                        "quest": gameData.current_phase.quest,
+                        "quest_number": gameData.current_phase.quest_number,
                         "team_building": teamBuildingPhases
                     }, status: "reveal-team-vote",
                     votes_status: lastTeamBuilding.votes_status
@@ -391,6 +393,7 @@
         async function voteTeam(username, docId, gameData) {
             document.getElementById('team-vote-container').classList.remove('hidden');
             document.getElementById('team-selection-container').classList.add('hidden');
+            document.getElementById('team-vote-reveal-container').classList.add('hidden');
             document.getElementById('reveal-container').classList.add('hidden');
             document.getElementById('lobby-container').classList.add('hidden');
 
@@ -416,11 +419,19 @@
             const infoDiv = votePanel.querySelector('#team-vote-info');
             const submitBtn = votePanel.querySelector('#submit-vote-btn');
             if (voted && voted[username]) {
-                form.querySelectorAll('input').forEach(input => input.disabled = true);
-                Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
-                submitBtn.disabled = true;
+                // form.querySelectorAll('input').forEach(input => input.disabled = true);
+                // Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
+                // submitBtn.disabled = true;
+                form.classList.add('hidden');
+                submitBtn.classList.add('hidden');
                 const unvote = gameData.players.filter(p => !Object.keys(voted).includes(p));
-                infoDiv.textContent = `You have already voted "${voted[username]}". Waiting for other players ${unvote.join(', ')} to vote...`;
+                console.log("Unvoted players:", unvote);
+                if (unvote.length < 1) {
+                    infoDiv.textContent = `You have already voted "${voted[username]}". All players have voted. Waiting for results...`;
+                    checkVotes(voted, docId, gameData);
+                } else {
+                    infoDiv.textContent = `You have already voted "${voted[username]}". Waiting for other players ${unvote.join(', ')} to vote...`;
+                }
                 return;
             }
 
@@ -461,7 +472,7 @@
                 console.log("Unvoted players:", unvote);
                 if (unvote.length < 1) {
                     // All players have voted, the next step will be handled by the onSnapshot listener
-                    infoDiv.textContent = `Your vote "${selected.value}" has been submitted. All players have voted.`;
+                    infoDiv.textContent = `Your vote "${selected.value}" has been submitted. All players have voted. All players have voted. Waiting for results...`;
                     checkVotes(lastTeamBuilding.votes, docId, gameData);
                 } else {
                     // Some players haven't voted yet
@@ -586,7 +597,7 @@
                 await updateDoc(doc(db, 'games', docId), {
                     past_phases: pastPhases,
                     current_phase: {
-                        quest: currentPhase.quest + 1,
+                        quest_number: currentPhase.quest_number + 1,
                         team_building: [{
                             leader: players[(players.indexOf(currentLeader) + 1) % players.length],
                         }],
@@ -599,20 +610,24 @@
         async function quest(username, docId, gameData) {
             const currentPhase = gameData.current_phase;
             const questCards = currentPhase.quest.cards || {};
+            const questMembers = Object.keys(questCards);
 
             // UI container
             const container = document.getElementById('quest-container')
             container.classList.remove('hidden');
+            container.querySelector('h2').textContent = `Quest Players ${questMembers.join(', ')}`;
             document.getElementById('reveal-container').classList.add('hidden');
             document.getElementById('team-vote-container').classList.add('hidden');
+            document.getElementById('team-vote-reveal-container').classList.add('hidden');
             document.getElementById('team-selection-container').classList.add('hidden');
             document.getElementById('lobby-container').classList.add('hidden');
             const votePanel = document.querySelector('#quest-container #selection-vote');
-            let pendingPlayers = Object.entries(gameData.current_phase.quest.cards).filter(([player, vote]) => vote === "Pending").map(([player, vote]) => player);
+            let pendingPlayers = Object.entries(questCards).filter(([player, vote]) => vote === "Pending").map(([player, vote]) => player);
+            console.log("Pending quest players:", pendingPlayers);
 
             // If user is a quest player, show quest-vote-form
-            if (Object.keys(questCards).includes(username)) {
-                if (questCards[username] === "Pending") {
+            if (questMembers.includes(username)) {
+                if (pendingPlayers.includes(username)) {
                     votePanel.innerHTML = `
                         <h2>Quest Vote</h2>
                         <form id="quest-vote-form">
@@ -648,12 +663,12 @@
                         await updateDoc(doc(db, 'games', docId), {
                             current_phase: currentPhase
                         });
-                        votePanel.textContent = `Your quest vote "${selected.value}" has been submitted. Waiting for other quest members ${pendingPlayers.join(', ')} to submit their quests...`;
+                        votePanel.textContent = `Your quest vote "${selected.value}" has been submitted. Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
                         submitBtn.disabled = true;
                         Array.from(form.querySelectorAll('input')).forEach(input => input.disabled = true);
                     };
                 } else {
-                    votePanel.textContent = `You have already submitted your quest vote "${questCards[username]}". Waiting for other quest members ${pendingPlayers.join(', ')} to submit their quests...`;
+                    votePanel.textContent = `You have already submitted your quest vote "${questCards[username]}". Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
                 }
             } else {
                 if (pendingPlayers.length < 1) {
@@ -663,7 +678,7 @@
                         status: "reveal-quest"
                     });
                 } else {
-                    votePanel.textContent = `Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
+                    votePanel.textContent = `You are not on the quest team. Waiting for ${pendingPlayers.join(', ')} to submit their quests...`;
                 }
             }
         }
@@ -815,7 +830,7 @@
                 const data = docSnap.data();
                 let status = data.status
                 console.log("Game status:", status);
-                if (status === "game_over") {
+                if (status === "game-over") {
                     revealGameResult(data);
                     return;
                 }
