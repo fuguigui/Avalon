@@ -44,3 +44,9 @@ npm run dev
 To get started, take a look at src/app/page.tsx.
 
 npm ci && npm run build
+
+## Referecnes
+
+https://avalon.fun/
+
+https://avalon-game.com/

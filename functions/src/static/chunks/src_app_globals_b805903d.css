@@ -353,10 +353,6 @@ body {
   position: relative;
 }
 
-.sticky {
-  position: sticky;
-}
-
 .inset-0 {
   inset: 0;
 }
@@ -553,6 +549,10 @@ body {
   margin-right: .5rem;
 }
 
+.mt-0\.5 {
+  margin-top: .125rem;
+}
+
 .mt-1 {
   margin-top: .25rem;
 }
@@ -614,10 +614,6 @@ body {
   height: 3rem;
 }
 
-.h-14 {
-  height: 3.5rem;
-}
-
 .h-16 {
   height: 4rem;
 }
@@ -644,10 +640,6 @@ body {
 
 .h-4 {
   height: 1rem;
-}
-
-.h-48 {
-  height: 12rem;
 }
 
 .h-5 {
@@ -738,10 +730,6 @@ body {
   width: 3rem;
 }
 
-.w-14 {
-  width: 3.5rem;
-}
-
 .w-16 {
   width: 4rem;
 }
@@ -798,10 +786,6 @@ body {
   width: 2.25rem;
 }
 
-.w-96 {
-  width: 24rem;
-}
-
 .w-\[--sidebar-width\] {
   width: var(--sidebar-width);
 }
@@ -816,6 +800,10 @@ body {
 
 .w-full {
   width: 100%;
+}
+
+.w-14 {
+  width: 3.5rem;
 }
 
 .min-w-0 {
@@ -1210,10 +1198,6 @@ body {
   border-color: hsl(var(--border));
 }
 
-.border-border\/40 {
-  border-color: hsl(var(--border) / .4);
-}
-
 .border-border\/50 {
   border-color: hsl(var(--border) / .5);
 }
@@ -1229,6 +1213,10 @@ body {
 .border-green-400 {
   --tw-border-opacity: 1;
   border-color: rgb(74 222 128 / var(--tw-border-opacity, 1));
+}
+
+.border-green-500\/50 {
+  border-color: #22c55e80;
 }
 
 .border-input {
@@ -1280,10 +1268,6 @@ body {
   background-color: hsl(var(--background) / .9);
 }
 
-.bg-background\/95 {
-  background-color: hsl(var(--background) / .95);
-}
-
 .bg-black\/80 {
   background-color: #000c;
 }
@@ -1303,6 +1287,18 @@ body {
 
 .bg-destructive {
   background-color: hsl(var(--destructive));
+}
+
+.bg-destructive\/10 {
+  background-color: hsl(var(--destructive) / .1);
+}
+
+.bg-destructive\/20 {
+  background-color: hsl(var(--destructive) / .2);
+}
+
+.bg-green-500\/10 {
+  background-color: #22c55e1a;
 }
 
 .bg-muted {
@@ -1330,10 +1326,6 @@ body {
   background-color: hsl(var(--secondary));
 }
 
-.bg-secondary\/30 {
-  background-color: hsl(var(--secondary) / .3);
-}
-
 .bg-sidebar {
   background-color: hsl(var(--sidebar-background));
 }
@@ -1344,6 +1336,10 @@ body {
 
 .bg-transparent {
   background-color: #0000;
+}
+
+.bg-secondary\/30 {
+  background-color: hsl(var(--secondary) / .3);
 }
 
 .fill-current {
@@ -1570,6 +1566,10 @@ body {
   font-weight: 600;
 }
 
+.uppercase {
+  text-transform: uppercase;
+}
+
 .tabular-nums {
   --tw-numeric-spacing: tabular-nums;
   font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
@@ -1626,6 +1626,11 @@ body {
 
 .text-foreground\/50 {
   color: hsl(var(--foreground) / .5);
+}
+
+.text-green-300 {
+  --tw-text-opacity: 1;
+  color: rgb(134 239 172 / var(--tw-text-opacity, 1));
 }
 
 .text-green-400 {
@@ -1773,17 +1778,8 @@ body {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }
 
-.backdrop-blur {
-  --tw-backdrop-blur: blur(8px);
-  backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
-}
-
 .backdrop-blur-sm {
   --tw-backdrop-blur: blur(4px);
-  backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
-}
-
-.backdrop-filter {
   backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
 
@@ -2642,12 +2638,6 @@ body {
 
 .peer\/menu-button[data-active="true"] ~ .peer-data-\[active\=true\]\/menu-button\:text-sidebar-accent-foreground {
   color: hsl(var(--sidebar-accent-foreground));
-}
-
-@supports (backdrop-filter: var(--tw)) {
-  .supports-\[backdrop-filter\]\:bg-background\/60 {
-    background-color: hsl(var(--background) / .6);
-  }
 }
 
 .dark\:border-destructive:is(.dark *) {

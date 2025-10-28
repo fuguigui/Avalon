@@ -14,10 +14,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { adminLogin } from '@/app/actions';
-import { useEffect, useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Redirecting } from '../redirecting';
 
 const FormSchema = z.object({
   adminId: z.string().min(1, { message: 'Admin ID is required.' }),
@@ -26,15 +24,6 @@ const FormSchema = z.object({
 
 export function AdminLoginForm() {
   const [isPending, startTransition] = useTransition();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const router = useRouter();
-
-  useEffect(() => {
-    const loggedIn = localStorage.getItem('isAdminLoggedIn');
-    if (loggedIn === 'true') {
-      setIsLoggedIn(true);
-    }
-  }, []);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -46,20 +35,8 @@ export function AdminLoginForm() {
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     startTransition(() => {
-      adminLogin(data).then(() => {
-        localStorage.setItem('isAdminLoggedIn', 'true');
-        router.push('/admin');
-      });
+      adminLogin(data);
     });
-  }
-
-  const handleLogoutAndStay = () => {
-    localStorage.removeItem('isAdminLoggedIn');
-    setIsLoggedIn(false);
-  };
-
-  if (isLoggedIn) {
-    return <Redirecting onCancel={handleLogoutAndStay} />;
   }
 
   return (

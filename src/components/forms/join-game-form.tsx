@@ -16,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import { joinGame } from '@/app/actions';
 import { useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 const FormSchema = z.object({
   username: z.string().min(2, {
@@ -24,16 +23,13 @@ const FormSchema = z.object({
   }).max(20, {
     message: 'Username must not exceed 20 characters.',
   }),
-  gameId: z.string().min(1, {
-    message: 'Game ID is required.',
-  }).max(20, {
-    message: 'Game ID must not exceed 20 characters.',
+  gameId: z.string().regex(/^[A-Z0-9]+$/, {
+    message: 'Game ID must be uppercase letters and numbers only.',
   }),
 });
 
 export function JoinGameForm() {
   const [isPending, startTransition] = useTransition();
-  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -44,15 +40,8 @@ export function JoinGameForm() {
   });
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    startTransition(async () => {
-      const result = await joinGame(data);
-      if (result?.error) {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to Join Game',
-          description: result.error,
-        });
-      }
+    startTransition(() => {
+      joinGame(data);
     });
   }
 
@@ -66,7 +55,7 @@ export function JoinGameForm() {
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input placeholder="Sir Lancelot" {...field} />
+                <Input placeholder="Loyal Servant" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -79,7 +68,7 @@ export function JoinGameForm() {
             <FormItem>
               <FormLabel>Game ID</FormLabel>
               <FormControl>
-                <Input placeholder="ANY_ID" {...field} />
+                <Input placeholder="ABC123" {...field} onChange={(e) => field.onChange(e.target.value.toUpperCase())} />
               </FormControl>
               <FormMessage />
             </FormItem>

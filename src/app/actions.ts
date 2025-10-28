@@ -2,14 +2,13 @@
 
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { checkRoleFairness } from '@/ai/role-fairness-check';
 import { ROLES, QUEST_CONFIGURATIONS } from '@/lib/constants';
 import type { Role, Game } from '@/lib/types';
 
 const joinGameSchema = z.object({
   username: z.string().min(2).max(20),
-  gameId: z.string().min(1).max(20),
+  gameId: z.string().length(6),
 });
 
 const createGameSchema = z.object({
@@ -33,46 +32,26 @@ export async function adminLogin(data: unknown) {
     console.error(validatedFields.error.flatten().fieldErrors);
     return;
   }
-  
+
   // In a real app, you would validate admin credentials here.
+  redirect('/admin');
 }
 
 export async function joinGame(data: unknown) {
   const validatedFields = joinGameSchema.safeParse(data);
 
   if (!validatedFields.success) {
-    return { error: "Invalid form data." };
+    console.error(validatedFields.error.flatten().fieldErrors);
+    return;
   }
-  
+
   const { gameId, username } = validatedFields.data;
-  
-  const gameRef = doc(db, 'games', gameId);
-  const gameSnap = await getDoc(gameRef);
 
-  if (!gameSnap.exists()) {
-    return { error: 'Game not found.' };
-  }
-  
-  const gameData = gameSnap.data() as Game;
-
-  if (gameData.players.length >= gameData.settings.playerCount) {
-    return { error: 'Game is full.' };
-  }
-
-  if (gameData.players.some(p => p.username === username)) {
-      return { error: 'Username is already taken.' };
-  }
-
-  const newPlayer = {
-    id: (gameData.players.length + 1).toString(), // Simple ID for now
-    username,
-    role: null,
-    isAi: false
-  };
-
-  await updateDoc(gameRef, {
-      players: arrayUnion(newPlayer)
-  });
+  // TODO: connect to Redis
+  // 1. Check if gameId exists in Redis.
+  // 2. Check if the game is not full.
+  // 3. Add the user to the game document.
+  // 4. Set a user session/cookie.
 
   redirect(`/game/${gameId}?username=${username}`);
 }
@@ -83,42 +62,57 @@ export async function createGame(data: unknown) {
   if (!validatedFields.success) {
     return {
       error: "Invalid form data.",
+      fairness: null,
     };
   }
-  
+
   const { playerCount, roles: selectedRoles, gameId: customGameId, aiCount, chatEnabled, minionCount } = validatedFields.data;
 
   // Dynamically calculate loyal servant count and add to roles
   const loyalServantCount = playerCount - selectedRoles.length - minionCount;
-
   if (loyalServantCount < 0) {
     return {
       error: 'Too many roles selected for the number of players.',
     };
   }
-  
+
   const finalRoles = [
     ...selectedRoles,
     ...Array(minionCount).fill('Minion of Mordred'),
     ...Array(loyalServantCount).fill('Loyal Servant of Arthur')
   ];
-  
+
   const { goodRolesCount, evilRolesCount } = finalRoles.reduce((acc, roleName) => {
-      const role = ROLES[roleName as Role['name']];
-      if (role) {
-        if (role.alignment === 'good') acc.goodRolesCount++;
-        else acc.evilRolesCount++;
-      }
-      return acc;
-    }, { goodRolesCount: 0, evilRolesCount: 0 });
-    
+    const role = ROLES[roleName as Role['name']];
+    if (role) {
+      if (role.alignment === 'good') acc.goodRolesCount++;
+      else acc.evilRolesCount++;
+    }
+    return acc;
+  }, { goodRolesCount: 0, evilRolesCount: 0 });
+
   if (goodRolesCount + evilRolesCount !== playerCount) {
-     return {
-        error: 'The number of selected roles must match the player count.',
-     };
+    return {
+      error: 'The number of selected roles must match the player count.',
+      fairness: null
+    };
   }
-  
-  const gameId = customGameId && customGameId.length > 0
+
+  // Run the fairness check
+  const fairnessResult = await checkRoleFairness({
+    numPlayers: playerCount,
+    numGoodRoles: goodRolesCount,
+    numEvilRoles: evilRolesCount,
+  });
+
+  if (!fairnessResult.isFair) {
+    return {
+      error: 'Fairness check failed. Please adjust roles.',
+      fairness: fairnessResult,
+    }
+  }
+
+  const gameId = customGameId && customGameId.length === 6
     ? customGameId
     : Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -149,9 +143,11 @@ export async function createGame(data: unknown) {
       questVotes: {},
     })),
   };
-
-  await setDoc(doc(db, "games", gameId), newGame);
-
+  // In a real app, you would:
+  // 1. Create a new game document in Firestore with the gameId.
+  // 2. Store all the game settings.
+  // 3. Set the user as the host.
+  // 4. Set a user session/cookie.
   return {
     redirect: `/game/${gameId}`,
   };

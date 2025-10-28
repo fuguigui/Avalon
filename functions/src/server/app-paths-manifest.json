@@ -1,4 +1,8 @@
 {
+  "/admin/create/page": "app/admin/create/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/game/[gameId]/page": "app/game/[gameId]/page.js",
   "/page": "app/page.js"
 }

@@ -10,7 +10,7 @@ export default function LandingPage() {
       <header className="absolute top-8 flex items-center gap-3 text-center">
         <KnightIcon className="h-10 w-10 text-accent" />
         <h1 className="font-headline text-4xl font-bold tracking-tighter sm:text-5xl">
-          AVALON
+          AVALON ANYTIME
         </h1>
       </header>
 

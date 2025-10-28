@@ -45,7 +45,7 @@ const sortedOptionalRoles = [...goodRoles, ...evilRolesSorted];
 
 
 const FormSchema = z.object({
-  playerCount: z.number().min(6).max(10),
+  playerCount: z.number().min(5).max(10),
   aiCount: z.number().min(0).max(10),
   roles: z.array(z.string()),
   minionCount: z.number().min(0).max(4),
@@ -64,7 +64,7 @@ export function CreateGameForm() {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      playerCount: 6,
+      playerCount: 5,
       aiCount: 0,
       roles: [], // Optional roles start empty
       minionCount: 1,
@@ -151,7 +151,7 @@ export function CreateGameForm() {
                   control={form.control}
                   render={({ field }) => (
                     <Slider
-                      min={6}
+                      min={5}
                       max={10}
                       step={1}
                       value={[field.value]}
