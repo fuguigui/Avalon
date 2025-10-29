@@ -41,3 +41,14 @@ export type Game = {
   };
   quests: Quest[];
 };
+
+export type RoleFairnessInput = {
+  numPlayers: number;
+  numGoodRoles: number;
+  numEvilRoles: number;
+};
+
+export type RoleFairnessOutput = {
+  isFair: boolean;
+  explanation: string;
+};

@@ -2,13 +2,13 @@
 
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { checkRoleFairness } from '@/ai/role-fairness-check';
+import { checkRoleFairness } from '@/lib/utils';
 import { ROLES, QUEST_CONFIGURATIONS } from '@/lib/constants';
 import type { Role, Game } from '@/lib/types';
 
 const joinGameSchema = z.object({
   username: z.string().min(2).max(20),
-  gameId: z.string().length(6),
+  gameId: z.string(),
 });
 
 const createGameSchema = z.object({

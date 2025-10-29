@@ -53,3 +53,16 @@ export const QUEST_CONFIGURATIONS: Record<number, Record<number, number[]>> = {
   9: { 1: [3, 4, 4, 5, 5], 2: [3, 4, 4, 5, 5] },
   10: { 1: [3, 4, 4, 5, 5], 2: [3, 4, 4, 5, 5] },
 };
+
+/**
+ * Standard distribution map: key = numPlayers, value = [numGoodRoles, numEvilRoles]
+ * Adjust these values if you use a different balancing rule.
+ */
+export const STANDARD_DISTRIBUTIONS: Record<number, [number, number]> = {
+  5: [3, 2],
+  6: [4, 2],
+  7: [4, 3],
+  8: [5, 3],
+  9: [6, 3],
+  10: [6, 4],
+};
