@@ -49,19 +49,22 @@ async function getGameData(gameId?: string, username?: string): Promise<Game | n
 }
 
 export default async function GamePage({
-  params,
-  searchParams,
+  params
 }: {
-  params: { gameId: string };
-  searchParams: { username?: string };
+  params: { gameId: string, username?: string } | Promise<{gameId: string, username?: string }>;
 }) {
-  const game = await getGameData(params.gameId, searchParams.username);
+    // await params to satisfy Next.js sync dynamic API requirement
+  const awaitedParams = await Promise.resolve(params as any);
+  const gameId = awaitedParams.gameId;
+  const username = awaitedParams?.username;
+
+  const game = await getGameData(gameId, username);
 
   if (!game) {
     notFound();
   }
 
-  const currentUser = game.players.find(p => p.username === searchParams.username) || game.players[0];
+  const currentUser = game.players.find(p => p.username === username) || game.players[0];
 
   return <GameClient initialGame={game} currentUser={currentUser} />;
 }
