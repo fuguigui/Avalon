@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { checkRoleFairness } from '@/lib/utils';
 import { ROLES, QUEST_CONFIGURATIONS } from '@/lib/constants';
 import type { Role, Game } from '@/lib/types';
+import { setJSON } from '@/lib/redis';
 
 const joinGameSchema = z.object({
   username: z.string().min(2).max(20),
@@ -12,7 +13,7 @@ const joinGameSchema = z.object({
 });
 
 const createGameSchema = z.object({
-  playerCount: z.coerce.number().min(6).max(10),
+  playerCount: z.coerce.number().min(5).max(10),
   aiCount: z.coerce.number().min(0).max(10),
   roles: z.array(z.string()),
   minionCount: z.number().min(0).max(4),
@@ -148,6 +149,7 @@ export async function createGame(data: unknown) {
   // 2. Store all the game settings.
   // 3. Set the user as the host.
   // 4. Set a user session/cookie.
+  await setJSON('12345', newGame, undefined, 'game');
   return {
     redirect: `/game/${gameId}`,
   };

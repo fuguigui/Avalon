@@ -2,6 +2,7 @@ import GameClient from '@/components/game/game-client';
 import { notFound } from 'next/navigation';
 import type { Game, Player } from '@/lib/types';
 import { ROLES } from '@/lib/constants';
+import { getJSON } from '@/lib/redis';
 
 // This is a mock function to simulate fetching game data from a database.
 async function getGameData(gameId?: string, username?: string): Promise<Game | null> {
@@ -19,7 +20,7 @@ async function getGameData(gameId?: string, username?: string): Promise<Game | n
       const newUser: Player = { id: (mockPlayers.length + 1).toString(), username, role: null, isAi: false };
       mockPlayers.push(newUser);
   }
-
+  const realGame = await getJSON<Game>('12345', 'game');
   const mockGame: Game = {
     gameId: gameId,
     hostId: '1',

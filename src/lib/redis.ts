@@ -40,11 +40,14 @@ async function connectRedis(): Promise<RedisClientType> {
     client = createClient({
         url: buildUrlFromEnv(),
         // password: process.env.REDIS_PASSWORD,
-        socket: {connectTimeout: process.env.NODE_ENV === 'development' ? 600000 : 5000}
+        socket: { connectTimeout: process.env.NODE_ENV === 'development' ? 600000 : 5000 }
     });
 
     client.on('error', (err) => {
         console.error('[Redis] Error:', err);
+    });
+    client.on('connect', () => {
+        console.warn('[Redis] Connecting…');
     });
     client.on('reconnecting', () => {
         console.warn('[Redis] Reconnecting…');
@@ -53,13 +56,27 @@ async function connectRedis(): Promise<RedisClientType> {
         isReady = true;
         console.log('[Redis] Ready');
     });
+    client.on('end', () => {
+        isReady = true;
+        console.log('[Redis] Connection ended');
+    });
 
     await client.connect();
+    isReady = true;
+    return client;
+}
 
+/**
+ * Graceful shutdown helper to close the client when your app is terminating.
+ * Call from your main entry or server shutdown hook.
+ */
+export async function closeRedis(): Promise<void> {
+    if (!isReady) return;
     // Graceful shutdown once per process
     const shutdown = async () => {
         try {
             await client.quit();
+            isReady = false;
         } catch {
             await client.disconnect();
         }
@@ -70,8 +87,7 @@ async function connectRedis(): Promise<RedisClientType> {
     process.once('SIGTERM', () => {
         shutdown().then(() => process.exit(0));
     });
-
-    return client;
+    isReady = false;
 }
 
 /**
