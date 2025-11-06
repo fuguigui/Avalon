@@ -149,7 +149,7 @@ export async function createGame(data: unknown) {
   // 2. Store all the game settings.
   // 3. Set the user as the host.
   // 4. Set a user session/cookie.
-  await setJSON('12345', newGame, undefined, 'game');
+  await setJSON(gameId, newGame, undefined, 'game');
   return {
     redirect: `/game/${gameId}`,
   };

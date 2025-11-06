@@ -5,7 +5,7 @@ import { ROLES } from '@/lib/constants';
 import { getJSON } from '@/lib/redis';
 
 // This is a mock function to simulate fetching game data from a database.
-async function getGameData(gameId?: string, username?: string): Promise<Game | null> {
+async function getMockGameData(gameId?: string, username?: string): Promise<Game | null> {
   gameId = '123456';
 
   const mockPlayers: Player[] = [
@@ -20,7 +20,6 @@ async function getGameData(gameId?: string, username?: string): Promise<Game | n
       const newUser: Player = { id: (mockPlayers.length + 1).toString(), username, role: null, isAi: false };
       mockPlayers.push(newUser);
   }
-  const realGame = await getJSON<Game>('12345', 'game');
   const mockGame: Game = {
     gameId: gameId,
     hostId: '1',
@@ -59,8 +58,8 @@ export default async function GamePage({
   const gameId = awaitedParams.gameId;
   const username = awaitedParams?.username;
 
-  const game = await getGameData(gameId, username);
-
+  // const game = await getMockGameData(gameId, username);
+  const game = await getJSON<Game>(gameId, 'game');
   if (!game) {
     notFound();
   }

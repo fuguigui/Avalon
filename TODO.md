@@ -1,1 +1,1 @@
-1. add redis
+1. in the phase Lobby, game/[gameId]/page.tsx, add the function for users to join the game one by one.
